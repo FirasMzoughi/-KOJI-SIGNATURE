@@ -1,6 +1,8 @@
 'use client';
 
 import { useClientStore } from '@/store/clientStore';
+
+export const dynamic = 'force-dynamic';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';

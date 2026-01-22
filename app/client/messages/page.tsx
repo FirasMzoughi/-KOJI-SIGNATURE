@@ -6,6 +6,8 @@ import { Input } from '@/components/ui/Input';
 import { Send, Paperclip } from 'lucide-react';
 import { useState } from 'react';
 
+export const dynamic = 'force-dynamic';
+
 export default function MessagesPage() {
   const [messages, setMessages] = useState([
     { id: 1, sender: 'Chef de Projet', text: 'Bonjour Alex, je vérifie juste si vous avez reçu le devis mis à jour ?', time: 'Il y a 2 heures', isMe: false },

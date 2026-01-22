@@ -1,6 +1,8 @@
 'use client';
 
 import Link from 'next/link';
+
+export const dynamic = 'force-dynamic';
 import { useClientStore } from '@/store/clientStore';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';

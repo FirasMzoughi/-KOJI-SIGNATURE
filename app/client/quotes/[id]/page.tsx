@@ -1,6 +1,8 @@
 'use client';
 
 import { useParams, useSearchParams } from 'next/navigation';
+
+export const dynamic = 'force-dynamic';
 import { useClientStore } from '@/store/clientStore';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';

@@ -9,7 +9,6 @@ import { ArrowRight, Zap, ScanLine, Smartphone, ShieldCheck, LayoutDashboard, Fi
 import Image from 'next/image';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useEffect, Suspense } from 'react';
-// testtttttttt
 
 function HomeContent() {
   const searchParams = useSearchParams();
