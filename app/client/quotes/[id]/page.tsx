@@ -10,7 +10,7 @@ import { Card } from '@/components/ui/Card';
 import { SignatureModal } from '@/components/features/SignatureModal';
 import { useState, useEffect } from 'react';
 import { formatDate, formatCurrency } from '@/lib/utils';
-import { Download, CheckCircle, XCircle, FileCheck, Printer, Calendar, ImagePlus } from 'lucide-react';
+import { Download, CheckCircle, XCircle, FileCheck, Printer, Calendar, ImagePlus, Palette, ListTodo, CheckSquare } from 'lucide-react';
 import Image from 'next/image';
 import { Textarea } from '@/components/ui/Textarea';
 
@@ -113,11 +113,11 @@ export default function QuoteDetailPage() {
             {/* Document Header */}
             <div className="flex justify-between items-start border-b pb-8">
               <div>
-                <h2 className="text-2xl font-bold text-gray-900">KOJI SIGNATURE</h2>
+                <h2 className="text-2xl font-bold text-gray-900">KOJI</h2>
                 <p className="text-sm text-gray-500 mt-1">
                   123 Design District<br />
                   New York, NY 10012<br />
-                  finance@koji-sig.com
+                  finance@koji.com
                 </p>
               </div>
               <div className="text-right">
@@ -210,6 +210,33 @@ export default function QuoteDetailPage() {
                 </div>
               </div>
             )}
+
+            {/* Material Selections Demo */}
+            <div className="pt-8 mt-8 border-t border-gray-100">
+              <h4 className="text-lg font-bold mb-4 flex items-center gap-2">
+                <Palette className="h-5 w-5 text-primary" /> Choix des Finitions
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="border rounded-lg p-4 hover:border-primary transition-colors cursor-pointer bg-gray-50">
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="font-semibold">Peinture Salon</span>
+                    <Badge variant="outline">En Attente</Badge>
+                  </div>
+                  <p className="text-sm text-gray-500 mb-3">Sélectionner la teinte principale pour les murs.</p>
+                  <Button variant="outline" size="sm" className="w-full">Choisir une couleur</Button>
+                </div>
+                <div className="border rounded-lg p-4 border-green-200 bg-green-50/50">
+                  <div className="flex justify-between items-start mb-2">
+                    <span className="font-semibold text-green-900">Parquet Chambre</span>
+                    <Badge className="bg-green-600 hover:bg-green-700">Validé</Badge>
+                  </div>
+                  <p className="text-sm text-green-800 mb-3">Chêne Clair Naturel (Ref: 8832)</p>
+                  <div className="text-xs text-green-700 flex items-center gap-1">
+                    <CheckCircle className="h-3 w-3" /> Confirmé le 24/01
+                  </div>
+                </div>
+              </div>
+            </div>
           </Card>
 
           {/* Comments & Photos Section */}
@@ -298,6 +325,44 @@ export default function QuoteDetailPage() {
                   ⚠️ Ce devis expire le {formatDate(quote.validUntil)}. Veuillez vérifier avant cette date.
                 </div>
               )}
+            </div>
+          </Card>
+
+          <Card className="p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <ListTodo className="h-5 w-5 text-primary" />
+              <h3 className="font-semibold text-lg">Actions Requises</h3>
+            </div>
+            <div className="space-y-3">
+              <div className="flex items-start gap-3">
+                <div className={`mt-0.5 rounded-full p-1 ${quote.status === 'Accepted' ? 'bg-green-100 text-green-600' : 'bg-primary/10 text-primary'}`}>
+                  {quote.status === 'Accepted' ? <CheckCircle className="h-3 w-3" /> : <span className="h-3 w-3 block rounded-full bg-current" />}
+                </div>
+                <div className="text-sm">
+                  <p className={`font-medium ${quote.status === 'Accepted' ? 'text-green-900 line-through' : ''}`}>Validation du Devis</p>
+                  {quote.status !== 'Accepted' && <p className="text-xs text-muted-foreground">Signez le devis pour démarrer.</p>}
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 rounded-full p-1 bg-gray-100 text-gray-400">
+                  <span className="h-3 w-3 block rounded-full bg-current" />
+                </div>
+                <div className="text-sm">
+                  <p className="font-medium text-gray-500">Acompte de 30%</p>
+                  <p className="text-xs text-muted-foreground">À régler après signature.</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 rounded-full p-1 bg-gray-100 text-gray-400">
+                  <span className="h-3 w-3 block rounded-full bg-current" />
+                </div>
+                <div className="text-sm">
+                  <p className="font-medium text-gray-500">Choix des Finitions</p>
+                  <p className="text-xs text-muted-foreground">Sélectionnez vos couleurs & matériaux.</p>
+                </div>
+              </div>
             </div>
           </Card>
 

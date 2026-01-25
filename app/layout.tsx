@@ -17,8 +17,8 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: 'Koji Signature',
-  description: 'Signature-grade spaces & finishes.',
+  title: 'Koji',
+  description: 'Professional spaces & finishes.',
 };
 
 export default function RootLayout({
