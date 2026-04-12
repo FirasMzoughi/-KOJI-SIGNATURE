@@ -142,9 +142,7 @@ export default function QuoteDetailPage() {
               <div>
                 <h2 className="text-2xl font-bold text-gray-900">KOJI</h2>
                 <p className="text-sm text-gray-500 mt-1">
-                  123 Design District<br />
-                  New York, NY 10012<br />
-                  finance@koji.com
+                  contact@koji.fr
                 </p>
               </div>
               <div className="text-right">
@@ -160,7 +158,6 @@ export default function QuoteDetailPage() {
                 <p className="font-semibold">{quote.clientName}</p>
                 <p className="text-gray-600">{quote.clientEmail}</p>
                 {/* Mock address */}
-                <p className="text-gray-600">789 Client Avenue,<br />Tech City, CA 90210</p>
               </div>
               <div className="space-y-2">
                 <div className="flex justify-between">

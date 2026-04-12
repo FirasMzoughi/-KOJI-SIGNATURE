@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/Card';
 import { SignatureModal } from '@/components/features/SignatureModal';
 import { useState, useEffect, useRef } from 'react';
 import { formatDate, formatCurrency } from '@/lib/utils';
-import { Download, CheckCircle, Printer, Calendar, FileText, Share2, Eye, ShieldCheck, Clock, MapPin, Paperclip, X, File as FileIcon, Send } from 'lucide-react';
+import { Download, CheckCircle, Printer, Calendar, FileText, Share2, Eye, ShieldCheck, Clock, Paperclip, X, File as FileIcon, Send } from 'lucide-react';
 import Image from 'next/image';
 import { Textarea } from '@/components/ui/Textarea';
 
@@ -221,10 +221,6 @@ export function QuoteDetailView({ id, email }: QuoteDetailViewProps) {
                     <h4 className="text-xs font-bold text-accent uppercase mb-1">Client</h4>
                     <p className="font-bold text-primary text-lg">{quote.clientName}</p>
                     <p className="text-sm text-muted-foreground">{quote.clientEmail}</p>
-                    <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
-                      <MapPin className="h-3 w-3" />
-                      <span>789 Client Avenue, Tech City</span>
-                    </div>
                   </div>
                 </div>
               </div>

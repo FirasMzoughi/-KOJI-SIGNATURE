@@ -6,9 +6,9 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatCurrency(amount: number) {
-  return new Intl.NumberFormat("en-US", {
+  return new Intl.NumberFormat("fr-FR", {
     style: "currency",
-    currency: "USD", // Or custom currency symbol if preferred
+    currency: "EUR",
   }).format(amount);
 }
 
@@ -17,12 +17,11 @@ export function formatDate(date: string | Date | null | undefined) {
 
   const dateObj = new Date(date);
 
-  // Check if the date is valid
   if (isNaN(dateObj.getTime())) {
     return "N/A";
   }
 
-  return new Intl.DateTimeFormat("en-US", {
+  return new Intl.DateTimeFormat("fr-FR", {
     dateStyle: "medium",
   }).format(dateObj);
 }
