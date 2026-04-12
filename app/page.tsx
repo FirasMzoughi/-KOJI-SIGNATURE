@@ -3,7 +3,7 @@
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Suspense, useEffect } from 'react';
 import { QuoteDetailView } from '@/components/features/QuoteDetailView';
-
+import { Navbar } from "@/components/layout/Navbar";
 
 function HomeContent() {
   const searchParams = useSearchParams();
@@ -14,13 +14,19 @@ function HomeContent() {
 
   // If quoteId exists, render the Quote Detail View DIRECTLY
   if (quoteId) {
-    return <QuoteDetailView id={quoteId} email={email} />;
-    
+    return (
+      <div className="flex flex-col min-h-screen bg-background">
+        <Navbar />
+        <main className="flex-1">
+          <QuoteDetailView id={quoteId} email={email} />
+        </main>
+      </div>
+    );
   }
 
   // If no quoteId, redirect to Client Dashboard
   useEffect(() => {
-    router.replace('');
+    router.replace('/client');
   }, [router]);
 
   return (

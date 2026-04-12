@@ -1,19 +1,20 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff; /* Clean White */
-  --foreground: #0B0F14; /* Charcoal */
-  --primary: #1D74FF; /* Main Blue */
+  --background: #FFF7ED; /* Mobile: Cream */
+  --foreground: #0F172A; /* Mobile: Navy */
+  --primary: #0F172A; /* Mobile: Navy */
   --primary-foreground: #ffffff;
-  --secondary: #0B0F14; /* Charcoal for contrast */
+  --secondary: #A18B73; /* Mobile: Gold/Accent */
   --secondary-foreground: #ffffff;
-  --accent: #EBF3FF; /* Light Blue for hover/backgrounds */
-  --accent-foreground: #1D74FF;
-  --muted: #F4F4F5;
-  --muted-foreground: #71717A;
+  --accent: #A18B73; /* Mobile: Gold/Accent */
+  --accent-foreground: #ffffff;
+  --muted: #F1F5F9;
+  --muted-foreground: #64748B;
   --card: #ffffff;
-  --card-foreground: #0B0F14;
-  --border: #E4E4E7;
+  --card-foreground: #0F172A;
+  --border: #E2E8F0;
+  --radius: 1rem;
 }
 
 .dark {

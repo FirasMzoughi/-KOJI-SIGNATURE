@@ -14,12 +14,23 @@ export interface PortfolioItem {
 
 export type QuoteStatus = 'Draft' | 'Sent' | 'Accepted' | 'Rejected' | 'en_cours' | 'accepte' | 'refuse';
 
+export interface Attachment {
+  id: string;
+  bucket_id: string;
+  file_path: string;
+  mime_type: string;
+  file_size: number;
+  original_name: string;
+  signedUrl: string | null;
+}
+
 export interface QuoteComment {
   id: string;
   text: string;
-  author: string;
-  date: string;
-  attachments?: string[]; // Array of image URLs/Base64
+  author: string; // or author_name
+  author_email?: string;
+  date: string; // created_at
+  attachments?: Attachment[];
 }
 
 export interface QuoteLineItem {

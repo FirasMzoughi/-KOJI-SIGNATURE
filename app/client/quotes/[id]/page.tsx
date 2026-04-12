@@ -10,16 +10,17 @@ import { Card } from '@/components/ui/Card';
 import { SignatureModal } from '@/components/features/SignatureModal';
 import { useState, useEffect } from 'react';
 import { formatDate, formatCurrency } from '@/lib/utils';
-import { Download, CheckCircle, XCircle, FileCheck, Printer, Calendar, ImagePlus, Palette, ListTodo, CheckSquare } from 'lucide-react';
+import { Download, CheckCircle, XCircle, FileCheck, Printer, Calendar, ImagePlus, Palette, ListTodo, CheckSquare, Paperclip, X, File as FileIcon, Send, Share2 } from 'lucide-react';
 import Image from 'next/image';
 import { Textarea } from '@/components/ui/Textarea';
+import { useRef } from 'react';
 
 export default function QuoteDetailPage() {
   const params = useParams();
   const id = params?.id as string;
   const searchParams = useSearchParams();
   const email = searchParams?.get('email') || undefined;
-  const { quotes, updateQuoteStatus, updateQuoteStartDate, addQuoteComment, user, fetchQuote, isLoading, error } = useClientStore();
+  const { quotes, updateQuoteStatus, updateQuoteStartDate, addQuoteMessage, user, fetchQuote, isLoading, error } = useClientStore();
 
   useEffect(() => {
     if (id) {
@@ -31,7 +32,9 @@ export default function QuoteDetailPage() {
 
   // Local state for new comment
   const [newComment, setNewComment] = useState('');
-  const [selectedImages, setSelectedImages] = useState<File[]>([]);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [isSending, setIsSending] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [isSignModalOpen, setIsSignModalOpen] = useState(false);
 
   if (isLoading) return <div className="p-8 flex justify-center items-center h-screen">Chargement du devis...</div>;
@@ -54,21 +57,45 @@ export default function QuoteDetailPage() {
     updateQuoteStartDate(quote.id, e.target.value);
   };
 
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      setSelectedImages(Array.from(e.target.files));
+      const files = Array.from(e.target.files);
+      const validFiles = files.filter(file => {
+        if (file.size > 10 * 1024 * 1024) {
+          alert(`Fichier trop volumineux: ${file.name} (Max 10MB)`);
+          return false;
+        }
+        return true;
+      });
+
+      if (pendingFiles.length + validFiles.length > 10) {
+        alert("Maximum 10 fichiers par message.");
+        return;
+      }
+
+      setPendingFiles(prev => [...prev, ...validFiles]);
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
-  const handleSubmitComment = () => {
-    if (!newComment.trim() && selectedImages.length === 0) return;
+  const removeFile = (index: number) => {
+    setPendingFiles(prev => prev.filter((_, i) => i !== index));
+  };
 
-    // Convert images to object URLs for preview (simulated upload)
-    const imageUrls = selectedImages.map(file => URL.createObjectURL(file));
+  const handleSubmitComment = async () => {
+    if ((!newComment.trim() && pendingFiles.length === 0) || isSending || !quote) return;
 
-    addQuoteComment(quote.id, newComment, imageUrls);
-    setNewComment('');
-    setSelectedImages([]);
+    setIsSending(true);
+    try {
+      await addQuoteMessage(quote.id, newComment, pendingFiles);
+      setNewComment('');
+      setPendingFiles([]);
+      // alert("Message envoyé !");
+    } catch (error) {
+      alert("Erreur lors de l'envoi du message.");
+    } finally {
+      setIsSending(false);
+    }
   };
 
   return (
@@ -204,7 +231,7 @@ export default function QuoteDetailPage() {
                 <div className="flex flex-col gap-2">
                   <p className="text-xs font-bold text-gray-400 uppercase">Signature Autorisée</p>
                   <div className="h-16 w-48 relative border border-dashed border-gray-200 rounded bg-gray-50">
-                    <Image src={quote.signature} alt="Signature Client" fill className="object-contain" />
+                    <Image src={quote.signature} alt="Approbation client" fill className="object-contain" />
                   </div>
                   <p className="text-xs text-gray-400">Signé par {user?.name} le {quote.signedAt ? formatDate(quote.signedAt) : 'Date inconnue'}</p>
                 </div>
@@ -241,10 +268,10 @@ export default function QuoteDetailPage() {
 
           {/* Comments & Photos Section */}
           <Card className="p-6">
-            <h3 className="font-semibold text-lg mb-4">Commentaires & Photos</h3>
+            <h3 className="font-semibold text-lg mb-4">Discussion</h3>
 
-            {/* Existing Comments List */}
-            <div className="space-y-6 mb-6">
+            {/* Comments List */}
+            <div className="space-y-6 mb-6 max-h-[600px] overflow-y-auto">
               {quote.comments?.map((comment) => (
                 <div key={comment.id} className="flex gap-4">
                   <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
@@ -255,13 +282,37 @@ export default function QuoteDetailPage() {
                       <p className="text-sm font-semibold">{comment.author}</p>
                       <span className="text-xs text-muted-foreground">{formatDate(comment.date)}</span>
                     </div>
-                    <p className="text-sm text-gray-600">{comment.text}</p>
+                    {comment.text && <p className="text-sm text-gray-600">{comment.text}</p>}
+
+                    {/* Attachment Grid */}
                     {comment.attachments && comment.attachments.length > 0 && (
                       <div className="flex gap-2 mt-2 flex-wrap">
-                        {comment.attachments.map((url, idx) => (
-                          <div key={idx} className="relative w-20 h-20 rounded border overflow-hidden">
-                            <Image src={url} alt="Attachment" fill className="object-cover" />
-                          </div>
+                        {comment.attachments.map((att) => (
+                          <a
+                            key={att.id}
+                            href={att.signedUrl || '#'}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="group relative block rounded-lg overflow-hidden border border-border hover:border-accent transition-colors"
+                          >
+                            {att.mime_type?.startsWith('image/') ? (
+                              <div className="h-20 w-20 relative bg-gray-50 text-gray-400">
+                                <Image
+                                  src={att.signedUrl || '/placeholder.png'}
+                                  alt={att.original_name}
+                                  fill
+                                  className="object-cover"
+                                />
+                              </div>
+                            ) : (
+                              <div className="h-20 w-20 flex flex-col items-center justify-center bg-gray-50 p-1">
+                                <FileIcon className="h-6 w-6 text-gray-400 mb-1" />
+                                <span className="text-[9px] text-gray-600 truncate w-full text-center px-1">
+                                  {att.original_name}
+                                </span>
+                              </div>
+                            )}
+                          </a>
                         ))}
                       </div>
                     )}
@@ -269,37 +320,80 @@ export default function QuoteDetailPage() {
                 </div>
               ))}
               {(!quote.comments || quote.comments.length === 0) && (
-                <p className="text-sm text-muted-foreground italic text-center py-4">Aucun commentaire pour le moment.</p>
+                <p className="text-sm text-muted-foreground italic text-center py-4">Aucun message pour le moment.</p>
               )}
             </div>
 
             {/* New Comment Input */}
             <div className="space-y-4 pt-4 border-t">
-              <Textarea
-                placeholder="Ajouter un commentaire..."
-                value={newComment}
-                onChange={(e) => setNewComment(e.target.value)}
-              />
+              {/* Previews */}
+              {pendingFiles.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {pendingFiles.map((file, idx) => (
+                    <div key={idx} className="relative group bg-gray-50 border border-gray-200 rounded-lg p-2 flex items-center gap-2 pr-6">
+                      {file.type.startsWith('image/') ? (
+                        <div className="h-8 w-8 relative rounded overflow-hidden flex-shrink-0">
+                          <img src={URL.createObjectURL(file)} alt="preview" className="h-full w-full object-cover" />
+                        </div>
+                      ) : (
+                        <FileIcon className="h-5 w-5 text-gray-400" />
+                      )}
+                      <div className="flex flex-col">
+                        <span className="text-xs font-medium text-gray-700 truncate max-w-[100px]">{file.name}</span>
+                        <span className="text-[10px] text-gray-500">{(file.size / 1024).toFixed(0)} KB</span>
+                      </div>
+                      <button
+                        onClick={() => removeFile(idx)}
+                        className="absolute top-1 right-1 p-0.5 rounded-full bg-gray-200 hover:bg-gray-300 text-gray-600"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
 
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <label htmlFor="image-upload" className="cursor-pointer inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3">
-                    <ImagePlus className="mr-2 h-4 w-4" /> Ajouter Photos
-                  </label>
+              <div className="flex items-center gap-3">
+                <div className="relative flex-1">
+                  <Textarea
+                    placeholder="Écrire un message..."
+                    className="min-h-[80px] bg-background border-border focus:border-accent pr-10"
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    disabled={isSending}
+                  />
+
+                  {/* Attachment Button */}
                   <input
-                    id="image-upload"
                     type="file"
                     multiple
-                    accept="image/*"
+                    ref={fileInputRef}
                     className="hidden"
-                    onChange={handleImageSelect}
+                    onChange={handleFileSelect}
                   />
-                  {selectedImages.length > 0 && (
-                    <span className="text-xs text-muted-foreground">{selectedImages.length} fichier(s)</span>
-                  )}
+                  <button
+                    className="absolute bottom-2 right-2 p-2 rounded-full text-gray-400 hover:text-accent hover:bg-gray-100 transition-colors"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isSending}
+                    title="Ajouter un fichier"
+                  >
+                    <Paperclip className="h-5 w-5" />
+                  </button>
                 </div>
-                <Button onClick={handleSubmitComment} disabled={!newComment.trim() && selectedImages.length === 0}>
-                  Envoyer
+
+                <Button
+                  size="icon"
+                  className="h-[80px] w-[80px] shrink-0 bg-primary hover:bg-primary/90 disabled:opacity-50"
+                  onClick={handleSubmitComment}
+                  disabled={isSending || (!newComment.trim() && pendingFiles.length === 0)}
+                  title="Envoyer"
+                  aria-label="Envoyer"
+                >
+                  {isSending ? (
+                    <div className="h-5 w-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  ) : (
+                    <Send className="h-5 w-5" />
+                  )}
                 </Button>
               </div>
             </div>

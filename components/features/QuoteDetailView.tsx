@@ -5,9 +5,9 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
 import { SignatureModal } from '@/components/features/SignatureModal';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { formatDate, formatCurrency } from '@/lib/utils';
-import { Download, CheckCircle, XCircle, FileCheck, Printer, Calendar, ImagePlus, Palette, ListTodo, CheckSquare } from 'lucide-react';
+import { Download, CheckCircle, Printer, Calendar, FileText, Share2, Eye, ShieldCheck, Clock, MapPin, Paperclip, X, File as FileIcon, Send } from 'lucide-react';
 import Image from 'next/image';
 import { Textarea } from '@/components/ui/Textarea';
 
@@ -17,7 +17,7 @@ interface QuoteDetailViewProps {
 }
 
 export function QuoteDetailView({ id, email }: QuoteDetailViewProps) {
-  const { quotes, updateQuoteStatus, updateQuoteStartDate, addQuoteComment, user, fetchQuote, isLoading, error } = useClientStore();
+  const { quotes, updateQuoteStatus, updateQuoteStartDate, addQuoteMessage, fetchQuote, isLoading, error } = useClientStore();
 
   useEffect(() => {
     if (id) {
@@ -29,373 +29,438 @@ export function QuoteDetailView({ id, email }: QuoteDetailViewProps) {
 
   // Local state for new comment
   const [newComment, setNewComment] = useState('');
-  const [selectedImages, setSelectedImages] = useState<File[]>([]);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [isSending, setIsSending] = useState(false);
   const [isSignModalOpen, setIsSignModalOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  if (isLoading) return <div className="p-8 flex justify-center items-center h-screen">Chargement du devis...</div>;
+  const handleSign = async (signatureData: string) => {
+    if (!quote) return;
+    await updateQuoteStatus(quote.id, 'Accepted', signatureData);
+    setIsSignModalOpen(false);
+  };
+
+  const handleReject = async () => {
+    if (!quote) return;
+    if (confirm('Êtes-vous sûr de vouloir refuser ce devis ?')) {
+      await updateQuoteStatus(quote.id, 'Rejected');
+    }
+  };
+
+  const handleStartDateChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!quote) return;
+    await updateQuoteStartDate(quote.id, e.target.value);
+  };
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files);
+      const validFiles = files.filter(file => {
+        if (file.size > 10 * 1024 * 1024) {
+          alert(`Fichier trop volumineux: ${file.name} (Max 10MB)`);
+          return false;
+        }
+        return true;
+      });
+
+      if (pendingFiles.length + validFiles.length > 10) {
+        alert("Maximum 10 fichiers par message.");
+        return;
+      }
+
+      setPendingFiles(prev => [...prev, ...validFiles]);
+      // Reset input manually
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const removeFile = (index: number) => {
+    setPendingFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSubmitComment = async () => {
+    if ((!newComment.trim() && pendingFiles.length === 0) || isSending || !quote) return;
+
+    setIsSending(true);
+    try {
+      await addQuoteMessage(quote.id, newComment, pendingFiles);
+      setNewComment('');
+      setPendingFiles([]);
+    } catch (error) {
+      alert("Erreur lors de l'envoi du message.");
+    } finally {
+      setIsSending(false);
+    }
+  };
+  if (isLoading) return <div className="p-8 flex justify-center items-center h-screen text-primary">Chargement du devis...</div>;
   if (error) return <div className="p-8 text-red-500">Erreur: {error}</div>;
 
   if (!quote) {
     return <div className="p-8">Quote not found</div>;
   }
 
-  const handleSign = (signature: string) => {
-    updateQuoteStatus(quote.id, 'Accepted', signature);
-  };
+  const handleDownload = async () => {
+    const element = document.getElementById('quote-document');
+    if (!element) {
+      alert("Erreur: Document non trouvé.");
+      return;
+    }
 
-  const handleReject = () => {
-    updateQuoteStatus(quote.id, 'Rejected');
-  };
+    try {
+      // Dynamic import to avoid SSR issues
+      // @ts-ignore
+      const module = await import('html2pdf.js');
+      const html2pdf = module.default || module;
 
-  const handleStartDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    updateQuoteStartDate(quote.id, e.target.value);
-  };
+      const opt: any = {
+        margin: [10, 10],
+        filename: `Devis-${quote.id}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, logging: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+      };
 
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      setSelectedImages(Array.from(e.target.files));
+      // html2pdf is a function that returns a worker
+      await html2pdf().set(opt).from(element).save();
+    } catch (error: any) {
+      console.error("PDF generation failed", error);
+      alert(`Erreur PDF: ${error?.message || 'Inconnue'}. L'impression s'ouvre.`);
+      window.print();
     }
   };
 
-  const handleSubmitComment = () => {
-    if (!newComment.trim() && selectedImages.length === 0) return;
-
-    // Convert images to object URLs for preview (simulated upload)
-    const imageUrls = selectedImages.map(file => URL.createObjectURL(file));
-
-    addQuoteComment(quote.id, newComment, imageUrls);
-    setNewComment('');
-    setSelectedImages([]);
+  const handleShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Devis ${quote.id}`,
+          text: `Voici le devis pour votre projet ${quote.projectTitle}`,
+          url: window.location.href,
+        });
+      } catch (err) {
+        console.error('Error sharing:', err);
+      }
+    } else {
+      // Fallback
+      navigator.clipboard.writeText(window.location.href);
+      alert("Lien copié dans le presse-papier !");
+    }
   };
 
-  return (
-    <div className="min-h-screen bg-background p-4 md:p-8">
-      <div className="max-w-5xl mx-auto space-y-8 pb-12">
-        {/* Header / Actions */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-background/50 sticky top-0 z-10 py-4 backdrop-blur-md border-b -mx-8 px-8">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-serif font-bold">Devis {quote.id}</h1>
-            <Badge variant={quote.status === 'Accepted' ? 'success' : quote.status === 'Rejected' ? 'destructive' : 'default'} className="text-sm px-3 py-1">
-              {quote.status}
-            </Badge>
-          </div>
-          <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm" onClick={() => window.print()}>
-              <Printer className="mr-2 h-4 w-4" /> Imprimer
-            </Button>
-            <Button variant="outline" size="sm">
-              <Download className="mr-2 h-4 w-4" /> PDF
-            </Button>
-            {(quote.status === 'Sent' || quote.status === 'en_cours') && (
-              <>
-                <Button variant="outline" className="text-red-500 hover:text-red-600 hover:bg-red-50 border-red-200" onClick={handleReject}>
-                  Refuser
-                </Button>
-                <Button onClick={() => setIsSignModalOpen(true)}>
-                  Accepter & Signer
-                </Button>
-              </>
-            )}
-            {(quote.status === 'Accepted' || quote.status === 'accepte') && (
-              <Button disabled variant="outline" className="bg-green-50 text-green-700 border-green-200 opacity-100">
-                <CheckCircle className="mr-2 h-4 w-4" /> Signé
-              </Button>
-            )}
-          </div>
-        </div>
+  // derived state
+  const isAccepted = quote.status === 'Accepted' || quote.status === 'accepte';
+  const isRejected = quote.status === 'Rejected' || quote.status === 'refuse';
+  const canAct = !isAccepted && !isRejected;
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Document & Comments */}
-          <div className="lg:col-span-2 space-y-6">
-            <Card className="p-8 md:p-12 space-y-8 bg-white text-gray-900 shadow-sm border-0 print:shadow-none">
-              {/* Document Header */}
-              <div className="flex justify-between items-start border-b pb-8">
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900">KOJI</h2>
-                  <p className="text-sm text-gray-500 mt-1">
-                    123 Design District<br />
-                    New York, NY 10012<br />
-                    finance@koji.com
-                  </p>
+  return (
+    <div className="min-h-screen bg-background p-4 md:p-8 font-sans">
+      <div className="max-w-6xl mx-auto space-y-6">
+
+        {/* --- Top Header Card (Mobile Style) --- */}
+        <Card className="p-6 border-none shadow-sm bg-white overflow-hidden relative">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <Badge className="bg-primary/10 text-primary hover:bg-primary/20 border-none uppercase tracking-wider text-xs font-bold px-2 py-1">
+                  {quote.status}
+                </Badge>
+                <span className="text-xs font-bold text-accent tracking-wider uppercase">DEVIS #{quote.id.substring(0, 8)}</span>
+              </div>
+              <h1 className="text-3xl md:text-4xl font-serif font-bold text-primary">
+                {isAccepted ? 'Devis Accepté' : isRejected ? 'Devis Refusé' : 'Devis prêt'}
+              </h1>
+              <p className="text-muted-foreground mt-1 text-sm">
+                Valable jusqu'au {formatDate(quote.validUntil)}
+              </p>
+            </div>
+
+            {/* Progress Indicator */}
+            <div className="flex flex-col items-end">
+              <span className="text-xs font-bold text-accent uppercase tracking-wider mb-2">Étape 5/5</span>
+              <div className="flex gap-1">
+                {[1, 2, 3, 4].map(i => <div key={i} className="h-1.5 w-6 rounded-full bg-primary/20" />)}
+                <div className="h-1.5 w-6 rounded-full bg-primary" />
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+          {/* --- LEFT COLUMN (Document) --- */}
+          <div className="md:col-span-2 space-y-6">
+
+            {/* Quote Document Card */}
+            <Card className="p-8 bg-[#ffffff] border-none space-y-8" id="quote-document">
+              {/* Header Row */}
+              <div className="flex justify-between items-start">
+                <div className="flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-lg bg-[#F1F5F9] flex items-center justify-center">
+                    <ShieldCheck className="h-6 w-6 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-lg text-primary">Koji </h3>
+                    <p className="text-xs text-muted-foreground">contact@koji.com</p>
+                  </div>
                 </div>
                 <div className="text-right">
-                  <h3 className="text-lg font-bold text-gray-400 uppercase tracking-widest">Quote</h3>
-                  <p className="text-xl font-mono mt-2">{quote.id}</p>
+                  <p className="text-xs font-bold text-accent uppercase mb-1">Date</p>
+                  <p className="text-sm font-semibold text-primary">{formatDate(quote.issuedDate)}</p>
                 </div>
               </div>
+
+              <div className="h-px bg-[#E2E8F0]" />
 
               {/* Client Info */}
-              <div className="grid grid-cols-2 gap-8">
-                <div>
-                  <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Facturer à</h4>
-                  <p className="font-semibold">{quote.clientName}</p>
-                  <p className="text-gray-600">{quote.clientEmail}</p>
-                  {/* Mock address */}
-                  <p className="text-gray-600">789 Client Avenue,<br />Tech City, CA 90210</p>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Date d'émission:</span>
-                    <span className="font-medium">{formatDate(quote.issuedDate)}</span>
+              <div className="bg-[#FFF7ED] rounded-xl p-6 border border-[#F1F5F9]">
+                <div className="flex items-start gap-4">
+                  <div className="h-10 w-10 rounded-full bg-[#ffffff] flex items-center justify-center shadow-sm text-[#A18B73] font-bold">
+                    C
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Valide jusqu'au:</span>
-                    <span className="font-medium">{formatDate(quote.validUntil)}</span>
-                  </div>
-                  <div className="flex justify-between text-yellow-600 font-medium">
-                    <span>Projet:</span>
-                    <span>{quote.projectTitle}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Line Items */}
-              <div className="mt-8">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-gray-200">
-                      <th className="text-left font-semibold py-3 text-gray-900">Description</th>
-                      <th className="text-right font-semibold py-3 text-gray-900">Qté</th>
-                      <th className="text-right font-semibold py-3 text-gray-900">Prix Unit.</th>
-                      <th className="text-right font-semibold py-3 text-gray-900">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {quote.items.map((item) => (
-                      <tr key={item.id}>
-                        <td className="py-4 text-gray-700">{item.description}</td>
-                        <td className="py-4 text-right text-gray-700">{item.quantity}</td>
-                        <td className="py-4 text-right text-gray-700">{formatCurrency(item.unitPrice)}</td>
-                        <td className="py-4 text-right font-medium text-gray-900">{formatCurrency(item.quantity * item.unitPrice)}</td>
-                      </tr>
-                    ))}
-                    {quote.items.length === 0 && (
-                      <tr>
-                        <td colSpan={4} className="py-8 text-center text-gray-400 italic">Aucune ligne (Devis récapitulatif)</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Totals */}
-              <div className="flex justify-end pt-4 border-t border-gray-200">
-                <div className="w-1/2 space-y-3">
-                  <div className="flex justify-between text-gray-500">
-                    <span>Sous-total</span>
-                    <span>{formatCurrency(quote.total)}</span>
-                  </div>
-                  <div className="flex justify-between text-gray-500">
-                    <span>TVA (20%)</span>
-                    <span>{formatCurrency(quote.total * 0.2)}</span>
-                  </div>
-                  <div className="flex justify-between text-lg font-bold text-gray-900 border-t border-gray-200 pt-3">
-                    <span>Total Dû</span>
-                    <span>{formatCurrency(quote.total * 1.2)}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Signature Area if Accepted */}
-              {(quote.status === 'Accepted' || quote.status === 'accepte') && quote.signature && (
-                <div className="pt-8 mt-8 border-t border-gray-100">
-                  <div className="flex flex-col gap-2">
-                    <p className="text-xs font-bold text-gray-400 uppercase">Signature Autorisée</p>
-                    <div className="h-16 w-48 relative border border-dashed border-gray-200 rounded bg-gray-50">
-                      <Image src={quote.signature} alt="Signature Client" fill className="object-contain" />
+                  <div>
+                    <h4 className="text-xs font-bold text-accent uppercase mb-1">Client</h4>
+                    <p className="font-bold text-primary text-lg">{quote.clientName}</p>
+                    <p className="text-sm text-muted-foreground">{quote.clientEmail}</p>
+                    <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
+                      <MapPin className="h-3 w-3" />
+                      <span>789 Client Avenue, Tech City</span>
                     </div>
-                    <p className="text-xs text-gray-400">Signé par {user?.name} le {quote.signedAt ? formatDate(quote.signedAt) : 'Date inconnue'}</p>
                   </div>
+                </div>
+              </div>
+
+              {/* Items Table (Simplified for mobile look) */}
+              <div className="space-y-4">
+                <h4 className="text-sm font-bold text-primary uppercase tracking-wider">Détails du chantier</h4>
+                <div className="space-y-3">
+                  {quote.items.map((item, idx) => (
+                    <div key={idx} className="group flex justify-between items-start p-4 bg-transparent border border-transparent">
+                      <div className="space-y-1">
+                        <p className="font-semibold text-primary">{item.description}</p>
+                        <p className="text-xs text-muted-foreground">Quantité: {item.quantity} • PU: {formatCurrency(item.unitPrice)}</p>
+                      </div>
+                      <p className="font-bold text-primary">{formatCurrency(item.quantity * item.unitPrice)}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Financial Recap */}
+              <div className="bg-[#F8FAFC] rounded-xl p-6 space-y-3">
+                <div className="flex justify-between text-sm text-muted-foreground">
+                  <span>Total HT</span>
+                  <span>{formatCurrency(quote.total)}</span>
+                </div>
+                <div className="flex justify-between text-sm text-muted-foreground">
+                  <span>TVA (20%)</span>
+                  <span>{formatCurrency(quote.total * 0.2)}</span>
+                </div>
+                <div className="h-px bg-[#E2E8F0] my-2" />
+                <div className="flex justify-between items-end">
+                  <span className="font-bold text-primary">Total TTC</span>
+                  <span className="text-2xl font-bold text-primary">{formatCurrency(quote.total * 1.2)}</span>
+                </div>
+                <p className="text-xs text-center text-muted-foreground pt-2">Payable à la commande</p>
+              </div>
+
+              {/* Signature Display */}
+              {isAccepted && quote.signature && (
+                <div className="mt-8 pt-8 border-t border-dashed border-[#E2E8F0]">
+                  <p className="text-xs font-bold text-accent uppercase mb-4">Approbation client</p>
+                  <div className="relative h-24 w-full md:w-64 border rounded-xl bg-[#ffffff] overflow-hidden">
+                    <Image src={quote.signature} alt="Signature" fill className="object-contain p-4" />
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-2">Signé le {quote.signedAt ? formatDate(quote.signedAt) : 'Date inconnue'}</p>
                 </div>
               )}
-
-              {/* Material Selections Demo */}
-              <div className="pt-8 mt-8 border-t border-gray-100">
-                <h4 className="text-lg font-bold mb-4 flex items-center gap-2">
-                  <Palette className="h-5 w-5 text-primary" /> Choix des Finitions
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="border rounded-lg p-4 hover:border-primary transition-colors cursor-pointer bg-gray-50">
-                    <div className="flex justify-between items-start mb-2">
-                      <span className="font-semibold">Peinture Salon</span>
-                      <Badge variant="outline">En Attente</Badge>
-                    </div>
-                    <p className="text-sm text-gray-500 mb-3">Sélectionner la teinte principale pour les murs.</p>
-                    <Button variant="outline" size="sm" className="w-full">Choisir une couleur</Button>
-                  </div>
-                  <div className="border rounded-lg p-4 border-green-200 bg-green-50/50">
-                    <div className="flex justify-between items-start mb-2">
-                      <span className="font-semibold text-green-900">Parquet Chambre</span>
-                      <Badge className="bg-green-600 hover:bg-green-700">Validé</Badge>
-                    </div>
-                    <p className="text-sm text-green-800 mb-3">Chêne Clair Naturel (Ref: 8832)</p>
-                    <div className="text-xs text-green-700 flex items-center gap-1">
-                      <CheckCircle className="h-3 w-3" /> Confirmé le 24/01
-                    </div>
-                  </div>
-                </div>
-              </div>
             </Card>
 
-            {/* Comments & Photos Section */}
-            <Card className="p-6">
-              <h3 className="font-semibold text-lg mb-4">Commentaires & Photos</h3>
-
-              {/* Existing Comments List */}
-              <div className="space-y-6 mb-6">
+            {/* Comments Section */}
+            <Card className="p-6 border-none shadow-sm space-y-6">
+              <h3 className="font-bold text-lg text-primary">Discussion</h3>
+              <div className="space-y-6">
                 {quote.comments?.map((comment) => (
                   <div key={comment.id} className="flex gap-4">
-                    <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
-                      {comment.author.substring(0, 2).toUpperCase()}
+                    <div className="h-8 w-8 rounded-full bg-accent/20 flex items-center justify-center text-xs font-bold text-accent shrink-0">
+                      {comment.author.charAt(0)}
                     </div>
-                    <div className="flex-1 space-y-1">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm font-semibold">{comment.author}</p>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-sm text-primary">{comment.author}</span>
                         <span className="text-xs text-muted-foreground">{formatDate(comment.date)}</span>
                       </div>
-                      <p className="text-sm text-gray-600">{comment.text}</p>
-                      {comment.attachments && comment.attachments.length > 0 && (
-                        <div className="flex gap-2 mt-2 flex-wrap">
-                          {comment.attachments.map((url, idx) => (
-                            <div key={idx} className="relative w-20 h-20 rounded border overflow-hidden">
-                              <Image src={url} alt="Attachment" fill className="object-cover" />
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                      <div className="bg-background p-3 rounded-lg text-sm text-primary/80">
+                        {comment.text}
+                      </div>
                     </div>
                   </div>
                 ))}
-                {(!quote.comments || quote.comments.length === 0) && (
-                  <p className="text-sm text-muted-foreground italic text-center py-4">Aucun commentaire pour le moment.</p>
-                )}
               </div>
 
-              {/* New Comment Input */}
-              <div className="space-y-4 pt-4 border-t">
-                <Textarea
-                  placeholder="Ajouter un commentaire..."
-                  value={newComment}
-                  onChange={(e) => setNewComment(e.target.value)}
-                />
+              <div className="border-t border-border pt-4">
+                {/* Attachment Preview (Composer) */}
+                {pendingFiles.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-3 px-1">
+                    {pendingFiles.map((file, idx) => (
+                      <div key={idx} className="relative group bg-gray-50 border border-gray-200 rounded-lg p-2 flex items-center gap-2 pr-6">
+                        {file.type.startsWith('image/') ? (
+                          <div className="h-8 w-8 relative rounded overflow-hidden flex-shrink-0">
+                            <img src={URL.createObjectURL(file)} alt="preview" className="h-full w-full object-cover" />
+                          </div>
+                        ) : (
+                          <FileIcon className="h-5 w-5 text-gray-400" />
+                        )}
+                        <div className="flex flex-col">
+                          <span className="text-xs font-medium text-gray-700 truncate max-w-[100px]">{file.name}</span>
+                          <span className="text-[10px] text-gray-500">{(file.size / 1024).toFixed(0)} KB</span>
+                        </div>
+                        <button
+                          onClick={() => removeFile(idx)}
+                          className="absolute top-1 right-1 p-0.5 rounded-full bg-gray-200 hover:bg-gray-300 text-gray-600"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <label htmlFor="image-upload" className="cursor-pointer inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-9 px-3">
-                      <ImagePlus className="mr-2 h-4 w-4" /> Ajouter Photos
-                    </label>
+                <div className="flex gap-3">
+                  <div className="relative flex-1">
+                    <Textarea
+                      placeholder="Écrire un message..."
+                      className="min-h-[80px] bg-background border-border focus:border-accent pr-10"
+                      value={newComment}
+                      onChange={(e) => setNewComment(e.target.value)}
+                      disabled={isSending}
+                    />
+
+                    {/* Attachment Button */}
                     <input
-                      id="image-upload"
                       type="file"
                       multiple
-                      accept="image/*"
+                      ref={fileInputRef}
                       className="hidden"
-                      onChange={handleImageSelect}
+                      onChange={handleFileSelect}
                     />
-                    {selectedImages.length > 0 && (
-                      <span className="text-xs text-muted-foreground">{selectedImages.length} fichier(s)</span>
-                    )}
+                    <button
+                      className="absolute bottom-2 right-2 p-2 rounded-full text-gray-400 hover:text-accent hover:bg-gray-100 transition-colors"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isSending}
+                      title="Ajouter un fichier"
+                    >
+                      <Paperclip className="h-5 w-5" />
+                    </button>
                   </div>
-                  <Button onClick={handleSubmitComment} disabled={!newComment.trim() && selectedImages.length === 0}>
-                    Envoyer
+
+                  <Button
+                    size="icon"
+                    className="h-[80px] w-[80px] shrink-0 bg-primary hover:bg-primary/90 disabled:opacity-50"
+                    onClick={handleSubmitComment}
+                    disabled={isSending || (!newComment.trim() && pendingFiles.length === 0)}
+                    title="Envoyer"
+                    aria-label="Envoyer"
+                  >
+                    {isSending ? (
+                      <div className="h-5 w-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <Send className="h-5 w-5" />
+                    )}
                   </Button>
                 </div>
               </div>
             </Card>
           </div>
 
-          {/* Sidebar Stats */}
-          <div className="space-y-6">
-            <Card className="p-6 bg-primary/5 border-primary/20">
-              <h3 className="font-semibold text-lg mb-4">Résumé du Devis</h3>
-              <div className="space-y-4 text-sm">
-                <div className="flex items-start gap-3">
-                  <div className="p-2 rounded bg-background shadow-sm">
-                    <FileCheck className="h-5 w-5 text-primary" />
-                  </div>
-                  <div>
-                    <p className="font-medium">Statut</p>
-                    <p className="text-muted-foreground">{quote.status} à ce jour</p>
-                  </div>
+          {/* --- RIGHT COLUMN (Actions & Info) --- */}
+          <div className="flex flex-col gap-6 mobile-actions-order">
+
+            {/* 1. PDF Preview Card */}
+            <Card className="p-1 border bg-white shadow-sm overflow-hidden">
+              <div className="bg-gray-100 aspect-[21/29] relative flex items-center justify-center rounded-t-xl overflow-hidden group">
+                {/* Mini preview effect */}
+                <div className="absolute inset-4 bg-white shadow-sm flex flex-col p-4 opacity-50 scale-95 group-hover:scale-100 transition-transform duration-500">
+                  <div className="h-4 w-12 bg-gray-200 rounded mb-4" />
+                  <div className="h-2 w-full bg-gray-100 rounded mb-2" />
+                  <div className="h-2 w-2/3 bg-gray-100 rounded mb-2" />
                 </div>
-                {quote.status === 'Sent' && (
-                  <div className="p-3 bg-yellow-50 text-yellow-800 rounded-md text-xs">
-                    ⚠️ Ce devis expire le {formatDate(quote.validUntil)}. Veuillez vérifier avant cette date.
-                  </div>
-                )}
+                <div className="absolute inset-0 flex items-center justify-center bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Button variant="secondary" size="sm" className="shadow-lg" onClick={handleDownload}>
+                    <Eye className="mr-2 h-4 w-4" /> Aperçu
+                  </Button>
+                </div>
+                <div className="absolute top-4 right-4 h-10 w-10 bg-red-50 text-red-500 rounded-lg flex items-center justify-center shadow-sm border border-red-100">
+                  <FileText className="h-5 w-5" />
+                </div>
               </div>
-            </Card>
-
-            <Card className="p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <ListTodo className="h-5 w-5 text-primary" />
-                <h3 className="font-semibold text-lg">Actions Requises</h3>
-              </div>
-              <div className="space-y-3">
-                <div className="flex items-start gap-3">
-                  <div className={`mt-0.5 rounded-full p-1 ${quote.status === 'Accepted' ? 'bg-green-100 text-green-600' : 'bg-primary/10 text-primary'}`}>
-                    {quote.status === 'Accepted' ? <CheckCircle className="h-3 w-3" /> : <span className="h-3 w-3 block rounded-full bg-current" />}
-                  </div>
-                  <div className="text-sm">
-                    <p className={`font-medium ${quote.status === 'Accepted' ? 'text-green-900 line-through' : ''}`}>Validation du Devis</p>
-                    {quote.status !== 'Accepted' && <p className="text-xs text-muted-foreground">Signez le devis pour démarrer.</p>}
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <div className="mt-0.5 rounded-full p-1 bg-gray-100 text-gray-400">
-                    <span className="h-3 w-3 block rounded-full bg-current" />
-                  </div>
-                  <div className="text-sm">
-                    <p className="font-medium text-gray-500">Acompte de 30%</p>
-                    <p className="text-xs text-muted-foreground">À régler après signature.</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3">
-                  <div className="mt-0.5 rounded-full p-1 bg-gray-100 text-gray-400">
-                    <span className="h-3 w-3 block rounded-full bg-current" />
-                  </div>
-                  <div className="text-sm">
-                    <p className="font-medium text-gray-500">Choix des Finitions</p>
-                    <p className="text-xs text-muted-foreground">Sélectionnez vos couleurs & matériaux.</p>
-                  </div>
+              <div className="p-4 bg-white">
+                <p className="font-semibold text-primary truncate mb-1">Devis-{quote.id}.pdf</p>
+                <p className="text-xs text-muted-foreground mb-4">PDF • 1.2 MB</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button variant="secondary" className="w-full text-xs" onClick={handleShare}>
+                    <Share2 className="mr-2 h-3 w-3" /> Partager
+                  </Button>
+                  <Button variant="secondary" className="w-full text-xs" onClick={handleDownload}>
+                    <Download className="mr-2 h-3 w-3" /> Télécharger
+                  </Button>
                 </div>
               </div>
             </Card>
 
-            {/* Start Date Picker */}
-            <Card className="p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <Calendar className="h-5 w-5 text-primary" />
-                <h3 className="font-semibold text-lg">Date de Début</h3>
+            {/* 2. Primary Actions */}
+            {canAct && (
+              <Card className="p-6 bg-white border-none shadow-sm space-y-4">
+                <h3 className="font-bold text-lg text-primary">Actions</h3>
+                <div className="space-y-3">
+                  <Button
+                    onClick={() => setIsSignModalOpen(true)}
+                    className="w-full h-14 text-lg bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20"
+                  >
+                    Accepter & Signer
+                  </Button>
+                  <Button
+                    onClick={handleReject}
+                    variant="outline"
+                    className="w-full h-12 border-red-100 text-red-600 hover:bg-red-50 hover:text-red-700 hover:border-red-200"
+                  >
+                    Refuser le devis
+                  </Button>
+                </div>
+                <Button variant="ghost" size="sm" className="w-full text-muted-foreground" onClick={() => window.print()}>
+                  <Printer className="mr-2 h-4 w-4" /> Imprimer
+                </Button>
+              </Card>
+            )}
+
+            {isAccepted && (
+              <Card className="p-6 bg-green-50 border border-green-100 text-center space-y-4">
+                <div className="h-12 w-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto">
+                  <CheckCircle className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-green-800">Devis Signé</h3>
+                  <p className="text-sm text-green-700 mt-1">Merci pour votre confiance.</p>
+                </div>
+              </Card>
+            )}
+
+            {/* 3. Date Picker (If needed) */}
+            <Card className="p-6 bg-white border-none shadow-sm space-y-4">
+              <div className="flex items-center gap-2">
+                <Clock className="h-5 w-5 text-accent" />
+                <h3 className="font-bold text-primary">Date souhaitée</h3>
               </div>
-              <p className="text-sm text-muted-foreground mb-4">
-                Souhaitez-vous proposer une date de début préférée pour ce chantier ?
-              </p>
               <div className="space-y-2">
-                <label className="text-xs font-medium uppercase text-muted-foreground">Date Préférée</label>
                 <input
                   type="date"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="w-full h-12 rounded-xl border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 transition-all font-sans"
                   value={quote.startDate || ''}
                   onChange={handleStartDateChange}
                 />
-                <p className="text-xs text-muted-foreground">
-                  Cette date est indicative et sera confirmée par l'équipe Koji.
-                </p>
+                <p className="text-xs text-muted-foreground">Date indicative de début de chantier.</p>
               </div>
             </Card>
 
-            <Card className="p-6">
-              <h3 className="font-semibold text-lg mb-4">Des questions ?</h3>
-              <p className="text-sm text-muted-foreground mb-4">
-                Si vous avez des questions sur ce devis, veuillez contacter directement la gestion de projet.
-              </p>
-              <Button variant="outline" className="w-full">
-                Envoyer un message
-              </Button>
-            </Card>
           </div>
         </div>
 
@@ -405,6 +470,17 @@ export function QuoteDetailView({ id, email }: QuoteDetailViewProps) {
           onSign={handleSign}
         />
       </div>
+
+      {/* Mobile-order styling adjustment via CSS if needed, but Grid order handles it mostly. 
+          For true mobile reordering where Actions comes first, we can use flex-col-reverse or 'order' utilities.
+      */}
+      <style jsx global>{`
+        @media (max-width: 768px) {
+          .mobile-actions-order {
+            order: -1; 
+          }
+        }
+      `}</style>
     </div>
   );
 }

@@ -17,10 +17,10 @@ interface ClientState {
   fetchQuote: (id: string, email?: string) => Promise<void>;
   updateQuoteStatus: (id: string, status: QuoteStatus, signature?: string) => Promise<void>;
   updateQuoteStartDate: (id: string, date: string) => Promise<void>;
-  addQuoteComment: (id: string, comment: string, attachments?: string[]) => Promise<void>;
+  addQuoteMessage: (id: string, text: string, files: File[]) => Promise<void>;
 }
 
-export const useClientStore = create<ClientState>((set) => ({
+export const useClientStore = create<ClientState>((set, get) => ({
   isAuthenticated: true, // Mock auth true by default for demo
   user: {
     name: "Alex Morgan",
@@ -66,6 +66,33 @@ export const useClientStore = create<ClientState>((set) => ({
       if (error) throw error;
       if (!data) throw new Error("Quote not found or access denied.");
 
+      // Fetch messages from API
+      let comments = [];
+      try {
+        const msgRes = await fetch(`/api/quotes/${id}/messages`);
+        if (msgRes.ok) {
+          const msgData = await msgRes.json();
+          comments = msgData.map((msg: any) => ({
+            id: msg.id,
+            text: msg.text,
+            author: msg.author_name || 'Inconnu',
+            author_email: msg.author_email,
+            date: msg.created_at,
+            attachments: (msg.attachments || []).map((att: any) => ({
+              id: att.id,
+              bucket_id: att.bucket_id,
+              file_path: att.file_path,
+              mime_type: att.mime_type,
+              file_size: att.file_size,
+              original_name: att.original_name,
+              signedUrl: att.signedUrl
+            }))
+          }));
+        }
+      } catch (e) {
+        console.error("Failed to fetch messages", e);
+      }
+
       const mappedQuote: Quote = {
         id: data.id,
         // Handle both camelCase (from accessors/views) and snake_case (raw tables)
@@ -80,7 +107,7 @@ export const useClientStore = create<ClientState>((set) => ({
         total: data.total || data.total_amount,
         signature: data.signature_data || data.signature,
         signedAt: data.signed_at || data.signedAt,
-        comments: []
+        comments: comments
       };
       set({ quotes: [mappedQuote] });
 
@@ -161,23 +188,55 @@ export const useClientStore = create<ClientState>((set) => ({
     }
   },
 
-  addQuoteComment: async (id, text, attachments) => {
-    set((state) => {
-      const newComment = {
-        id: Math.random().toString(36).substring(7),
-        text,
-        author: state.user?.name || "Client",
-        date: new Date().toISOString(),
-        attachments,
+  addQuoteMessage: async (id, text, files) => {
+    try {
+      const { user } = get();
+      const formData = new FormData();
+      formData.append('text', text);
+      formData.append('authorName', user?.name || 'Client');
+      formData.append('authorEmail', user?.email || '');
+
+      files.forEach(file => {
+        formData.append('files', file);
+      });
+
+      const res = await fetch(`/api/quotes/${id}/messages`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) throw new Error('Failed to send message');
+
+      const newMessage = await res.json();
+
+      // Map back to local state format
+      const mappedMessage = {
+        id: newMessage.id,
+        text: newMessage.text,
+        author: newMessage.author_name,
+        date: newMessage.created_at,
+        attachments: (newMessage.attachments || []).map((att: any) => ({
+          id: att.id,
+          bucket_id: att.bucket_id,
+          file_path: att.file_path,
+          mime_type: att.mime_type,
+          file_size: att.file_size,
+          original_name: att.original_name,
+          signedUrl: att.signedUrl
+        }))
       };
-      return {
+
+      set((state) => ({
         quotes: state.quotes.map((q) =>
           q.id === id
-            ? { ...q, comments: [...(q.comments || []), newComment] }
+            ? { ...q, comments: [...(q.comments || []), mappedMessage] }
             : q
         ),
-      };
-    });
+      }));
+    } catch (error) {
+      console.error("Error sending message:", error);
+      throw error;
+    }
   },
 }));
 
