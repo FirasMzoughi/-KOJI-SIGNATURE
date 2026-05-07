@@ -461,9 +461,9 @@ export function QuoteDetailView({ id, email }: QuoteDetailViewProps) {
         </div>
 
         <SignatureModal
-          isOpen={isSignModalOpen}
+          open={isSignModalOpen}
           onClose={() => setIsSignModalOpen(false)}
-          onSign={handleSign}
+          onConfirm={handleSign}
         />
       </div>
 

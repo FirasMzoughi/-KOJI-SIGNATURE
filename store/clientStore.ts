@@ -1,19 +1,25 @@
 import { create } from 'zustand';
+import type { User } from '@supabase/supabase-js';
 import { Quote, QuoteStatus } from '@/types';
 import { supabase } from '@/lib/supabaseClient';
 
+interface ClientUser {
+  id: string;
+  name: string;
+  email: string;
+  company: string;
+}
+
 interface ClientState {
   isAuthenticated: boolean;
-  user: {
-    name: string;
-    email: string;
-    company: string;
-  } | null;
+  authReady: boolean;
+  user: ClientUser | null;
   quotes: Quote[];
   isLoading: boolean;
   error: string | null;
-  login: () => void;
-  logout: () => void;
+  initAuth: () => Promise<void>;
+  setUserFromSession: (sessionUser: User | null) => void;
+  logout: () => Promise<void>;
   fetchQuote: (id: string, email?: string) => Promise<void>;
   updateQuoteStatus: (id: string, status: QuoteStatus, signature?: string) => Promise<void>;
   updateQuoteStartDate: (id: string, date: string) => Promise<void>;
@@ -21,17 +27,44 @@ interface ClientState {
 }
 
 export const useClientStore = create<ClientState>((set, get) => ({
-  isAuthenticated: true, // Mock auth true by default for demo
-  user: {
-    name: "Alex Morgan",
-    email: "alex@creative.com",
-    company: "Morgan Creative Group",
-  },
+  isAuthenticated: false,
+  authReady: false,
+  user: null,
   quotes: [],
   isLoading: false,
   error: null,
-  login: () => set({ isAuthenticated: true }),
-  logout: () => set({ isAuthenticated: false, user: null }),
+
+  setUserFromSession: (sessionUser) => {
+    if (!sessionUser) {
+      set({ isAuthenticated: false, user: null, authReady: true });
+      return;
+    }
+    const meta = sessionUser.user_metadata || {};
+    set({
+      isAuthenticated: true,
+      authReady: true,
+      user: {
+        id: sessionUser.id,
+        email: sessionUser.email || '',
+        name: meta.name || sessionUser.email?.split('@')[0] || 'Client',
+        company: meta.company || '',
+      },
+    });
+  },
+
+  initAuth: async () => {
+    const { data } = await supabase.auth.getSession();
+    get().setUserFromSession(data.session?.user ?? null);
+
+    supabase.auth.onAuthStateChange((_event, session) => {
+      get().setUserFromSession(session?.user ?? null);
+    });
+  },
+
+  logout: async () => {
+    await supabase.auth.signOut();
+    set({ isAuthenticated: false, user: null });
+  },
 
   fetchQuote: async (id: string, email?: string) => {
     set({ isLoading: true, error: null });
