@@ -53,8 +53,13 @@ export const useClientStore = create<ClientState>((set, get) => ({
   },
 
   initAuth: async () => {
-    const { data } = await supabase.auth.getSession();
-    get().setUserFromSession(data.session?.user ?? null);
+    try {
+      const { data } = await supabase.auth.getSession();
+      get().setUserFromSession(data.session?.user ?? null);
+    } catch (e) {
+      console.warn('initAuth getSession failed', e);
+      get().setUserFromSession(null);
+    }
 
     supabase.auth.onAuthStateChange((_event, session) => {
       get().setUserFromSession(session?.user ?? null);
@@ -69,32 +74,21 @@ export const useClientStore = create<ClientState>((set, get) => ({
   fetchQuote: async (id: string, email?: string) => {
     set({ isLoading: true, error: null });
     try {
-      let data, error;
+      // Always go through the RPC. It authorizes by id+email when email is provided,
+      // and by id alone (unguessable UUID) when it is empty — which matches links
+      // generated before client email was reliably attached.
+      const response = await supabase.rpc('get_quote_for_client', {
+        p_quote_id: id,
+        p_email: email ?? ''
+      });
 
-      if (email) {
-        // Try RPC first if email is available (secure access)
-        const response = await supabase.rpc('get_quote_for_client', {
-          p_quote_id: id,
-          p_email: email
-        });
+      let data = response.data;
+      const error = response.error;
 
-        data = response.data;
-        error = response.error;
-
-        if (Array.isArray(data)) {
-          data = data[0];
-        }
-
-      } else {
-        // Fallback to direct select (for public quotes or if no email passed)
-        const response = await supabase
-          .from('quotes')
-          .select('*')
-          .eq('id', id)
-          .maybeSingle();
-        data = response.data;
-        error = response.error;
+      if (Array.isArray(data)) {
+        data = data[0];
       }
+
 
       if (error) throw error;
       if (!data) throw new Error("Quote not found or access denied.");
@@ -126,18 +120,52 @@ export const useClientStore = create<ClientState>((set, get) => ({
         console.error("Failed to fetch messages", e);
       }
 
+      const metadata = data.metadata || {};
+      const client = metadata.client || {};
+      let items: any[] = [];
+      
+      if (data.quote_rooms && data.quote_rooms.length > 0) {
+        data.quote_rooms.forEach((room: any) => {
+          if (room.quote_tasks && room.quote_tasks.length > 0) {
+            room.quote_tasks.forEach((task: any) => {
+              items.push({
+                id: task.id || task.task_id,
+                description: task.label || task.task_name || 'Tâche',
+                quantity: task.inputs?.quantity || task.quantity || 1,
+                unitPrice: (task.unit_price_ht || 0) + (task.total_price_ht || 0),
+              });
+            });
+          }
+        });
+      } else if (data.items && Array.isArray(data.items)) {
+        items = data.items;
+      } else if (metadata.expenses) {
+        Object.values(metadata.expenses).forEach((roomItems: any) => {
+          if (Array.isArray(roomItems)) {
+            roomItems.forEach((item: any) => {
+              items.push({
+                id: item.id || '',
+                description: item.title || item.label || 'Tâche',
+                quantity: item.quantity || 1,
+                unitPrice: (item.laborCost || 0) + (item.materialCost || 0),
+              });
+            });
+          }
+        });
+      }
+
       const mappedQuote: Quote = {
         id: data.id,
         // Handle both camelCase (from accessors/views) and snake_case (raw tables)
-        clientName: data.client_name || data.clientName,
-        clientEmail: data.client_email || data.clientEmail,
-        projectTitle: data.project_title || data.projectTitle,
+        clientName: client.name || data.client_name || data.clientName || 'Client Inconnu',
+        clientEmail: client.email || data.client_email || data.clientEmail || '',
+        projectTitle: metadata.siteAddress || data.project_title || data.projectTitle || 'Projet Koji',
         status: data.status,
-        issuedDate: data.created_at || data.issuedDate,
-        validUntil: data.valid_until || data.validUntil,
+        issuedDate: metadata.date || data.created_at || data.issuedDate,
+        validUntil: metadata.validity || data.valid_until || data.validUntil || 'N/A',
         startDate: data.start_date || data.startDate,
-        items: data.items || [],
-        total: data.total || data.total_amount,
+        items: items,
+        total: data.total_ttc || data.total_ht || data.total || data.total_amount || 0,
         signature: data.signature_data || data.signature,
         signedAt: data.signed_at || data.signedAt,
         comments: comments
@@ -178,11 +206,12 @@ export const useClientStore = create<ClientState>((set, get) => ({
     }));
 
     try {
-      if (signature && currentQuote?.clientEmail) {
-        // Use the secure RPC function for signature submission
+      if (signature) {
+        // Use the secure RPC function for signature submission.
+        // The RPC accepts an empty email and falls back to id-only authorization.
         const { data, error } = await supabase.rpc('submit_quote_signature', {
           p_quote_id: id,
-          p_email: currentQuote.clientEmail,
+          p_email: currentQuote?.clientEmail || '',
           p_signature_data: signature
         });
 
