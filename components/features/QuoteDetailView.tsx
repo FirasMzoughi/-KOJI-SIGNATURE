@@ -419,11 +419,11 @@ export function QuoteDetailView({ id, email }: QuoteDetailViewProps) {
                   </div>
                 )}
 
-                {/* "Créé par Koji" footer */}
-                <div className="pt-4 mt-2 border-t border-[#F1F5F9] flex items-center justify-center gap-1.5">
+                {/* "Créé par Kôji" mark, kept small and on the side */}
+                <div className="pt-4 mt-2 border-t border-[#F1F5F9] flex items-center justify-end gap-1">
                   <span className="text-[10px] text-muted-foreground">Créé par</span>
-                  <img src="/koji-mark.svg" alt="" aria-hidden className="h-3 w-3" />
-                  <span className="text-[10px] font-bold" style={{ color: NAVY }}>Koji</span>
+                  <img src="/koji-mark.svg" alt="" aria-hidden className="h-2.5 w-2.5" />
+                  <span className="text-[10px] font-bold" style={{ color: GOLD }}>Kôji</span>
                 </div>
               </div>{/* /relative z-10 */}
             </Card>
