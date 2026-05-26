@@ -128,11 +128,21 @@ export const useClientStore = create<ClientState>((set, get) => ({
         data.quote_rooms.forEach((room: any) => {
           if (room.quote_tasks && room.quote_tasks.length > 0) {
             room.quote_tasks.forEach((task: any) => {
+              // The generator stores the per-unit labour price in unit_price_ht
+              // and the per-unit materials price in total_price_ht. The line's
+              // unit price is the sum of the two; the line total is unit × qty.
+              // (For a "forfait" line, the whole flat price rides in
+              // unit_price_ht at quantity 1, so the same maths still holds.)
+              const qty = Number(task.inputs?.quantity ?? task.quantity ?? 1) || 1;
+              const unitPrice =
+                Number(task.unit_price_ht || 0) + Number(task.total_price_ht || 0);
               items.push({
                 id: task.id || task.task_id,
                 description: task.label || task.task_name || 'Tâche',
-                quantity: task.inputs?.quantity || task.quantity || 1,
-                unitPrice: (task.unit_price_ht || 0) + (task.total_price_ht || 0),
+                quantity: qty,
+                unitPrice,
+                unit: task.inputs?.unite || task.inputs?.unit || undefined,
+                room: room.name || undefined,
               });
             });
           }
@@ -154,6 +164,21 @@ export const useClientStore = create<ClientState>((set, get) => ({
         });
       }
 
+      // Resolve the real totals computed by the generator. The HT/TTC values are
+      // stored explicitly on the quote, so we must NOT re-derive TVA from a single
+      // "total" field (the old bug treated TTC as HT and applied 20% again).
+      const lineSum = items.reduce(
+        (s: number, it: any) => s + Number(it.quantity || 0) * Number(it.unitPrice || 0),
+        0
+      );
+      const tvaRate = Number(data.tva_rate ?? metadata.tva_rate ?? 20) || 20;
+      // Prefer stored HT; fall back to the sum of the lines we just built.
+      const totalHT = Number(data.total_ht ?? metadata.total_ht ?? 0) || lineSum;
+      // Prefer stored TTC; otherwise derive it from HT and the VAT rate.
+      const totalTTC =
+        Number(data.total_ttc ?? metadata.total_ttc ?? 0) ||
+        totalHT * (1 + tvaRate / 100);
+
       const mappedQuote: Quote = {
         id: data.id,
         // Handle both camelCase (from accessors/views) and snake_case (raw tables)
@@ -165,7 +190,11 @@ export const useClientStore = create<ClientState>((set, get) => ({
         validUntil: metadata.validity || data.valid_until || data.validUntil || 'N/A',
         startDate: data.start_date || data.startDate,
         items: items,
-        total: data.total_ttc || data.total_ht || data.total || data.total_amount || 0,
+        totalHT,
+        totalTTC,
+        tvaRate,
+        // Keep `total` as TTC for any legacy reader.
+        total: totalTTC,
         signature: data.signature_data || data.signature,
         signedAt: data.signed_at || data.signedAt,
         comments: comments

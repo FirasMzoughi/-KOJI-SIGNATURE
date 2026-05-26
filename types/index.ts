@@ -38,6 +38,10 @@ export interface QuoteLineItem {
   description: string;
   quantity: number;
   unitPrice: number;
+  /** Optional unit label (e.g. "u", "m²", "h") carried from the generator. */
+  unit?: string;
+  /** Room/zone this line belongs to, so the client can see the grouping. */
+  room?: string;
 }
 
 export interface Quote {
@@ -51,7 +55,14 @@ export interface Quote {
   startDate?: string;
   comments?: QuoteComment[];
   items: QuoteLineItem[];
+  /** Total TTC (kept for backwards compatibility with existing callers). */
   total: number;
+  /** Real pre-tax total as computed by the generator. */
+  totalHT?: number;
+  /** Real tax-included total as computed by the generator. */
+  totalTTC?: number;
+  /** VAT rate in percent (e.g. 20). */
+  tvaRate?: number;
   signature?: string; // Base64 signature
   signedAt?: string;
 }

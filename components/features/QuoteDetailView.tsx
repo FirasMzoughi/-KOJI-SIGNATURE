@@ -152,6 +152,21 @@ export function QuoteDetailView({ id, email }: QuoteDetailViewProps) {
   const isRejected = quote.status === 'Rejected' || quote.status === 'refuse';
   const canAct = !isAccepted && !isRejected;
 
+  // Real totals come straight from the generator. We display them as-is instead
+  // of recomputing TVA from a single field (which previously double-taxed).
+  const totalHT = quote.totalHT ?? quote.total ?? 0;
+  const totalTTC = quote.totalTTC ?? quote.total ?? 0;
+  const tvaRate = quote.tvaRate ?? 20;
+  const tvaAmount = totalTTC - totalHT;
+
+  // Group line items by room so the breakdown mirrors the generator's layout.
+  // Items with no room fall under an empty key and render without a heading.
+  const groupedItems = quote.items.reduce<Record<string, typeof quote.items>>((acc, item) => {
+    const key = item.room || '';
+    (acc[key] ||= []).push(item);
+    return acc;
+  }, {});
+
   return (
     <div className="min-h-screen bg-background p-4 md:p-8 font-sans">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -225,36 +240,47 @@ export function QuoteDetailView({ id, email }: QuoteDetailViewProps) {
                 </div>
               </div>
 
-              {/* Items Table (Simplified for mobile look) */}
+              {/* Items Table — grouped by room when the data carries one */}
               <div className="space-y-4">
                 <h4 className="text-sm font-bold text-primary uppercase tracking-wider">Détails du chantier</h4>
-                <div className="space-y-3">
-                  {quote.items.map((item, idx) => (
-                    <div key={idx} className="group flex justify-between items-start p-4 bg-transparent border border-transparent">
+                <div className="space-y-5">
+                  {Object.entries(groupedItems).map(([room, lines]) => (
+                    <div key={room} className="space-y-2">
+                      {room && (
+                        <p className="text-xs font-bold text-accent uppercase tracking-wider">{room}</p>
+                      )}
                       <div className="space-y-1">
-                        <p className="font-semibold text-primary">{item.description}</p>
-                        <p className="text-xs text-muted-foreground">Quantité: {item.quantity} • PU: {formatCurrency(item.unitPrice)}</p>
+                        {lines.map((item, idx) => (
+                          <div key={idx} className="group flex justify-between items-start gap-4 py-3 border-b border-[#F1F5F9] last:border-none">
+                            <div className="space-y-1">
+                              <p className="font-semibold text-primary">{item.description}</p>
+                              <p className="text-xs text-muted-foreground">
+                                Quantité: {item.quantity}{item.unit ? ` ${item.unit}` : ''} • PU: {formatCurrency(item.unitPrice)}
+                              </p>
+                            </div>
+                            <p className="font-bold text-primary whitespace-nowrap">{formatCurrency(item.quantity * item.unitPrice)}</p>
+                          </div>
+                        ))}
                       </div>
-                      <p className="font-bold text-primary">{formatCurrency(item.quantity * item.unitPrice)}</p>
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* Financial Recap */}
+              {/* Financial Recap — uses the real totals from the generator */}
               <div className="bg-[#F8FAFC] rounded-xl p-6 space-y-3">
                 <div className="flex justify-between text-sm text-muted-foreground">
                   <span>Total HT</span>
-                  <span>{formatCurrency(quote.total)}</span>
+                  <span>{formatCurrency(totalHT)}</span>
                 </div>
                 <div className="flex justify-between text-sm text-muted-foreground">
-                  <span>TVA (20%)</span>
-                  <span>{formatCurrency(quote.total * 0.2)}</span>
+                  <span>TVA ({tvaRate}%)</span>
+                  <span>{formatCurrency(tvaAmount)}</span>
                 </div>
                 <div className="h-px bg-[#E2E8F0] my-2" />
                 <div className="flex justify-between items-end">
                   <span className="font-bold text-primary">Total TTC</span>
-                  <span className="text-2xl font-bold text-primary">{formatCurrency(quote.total * 1.2)}</span>
+                  <span className="text-2xl font-bold text-primary">{formatCurrency(totalTTC)}</span>
                 </div>
                 <p className="text-xs text-center text-muted-foreground pt-2">Payable à la commande</p>
               </div>

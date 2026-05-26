@@ -49,6 +49,7 @@ BEGIN
     'metadata', q.metadata,
     'total_ht', q.total_ht,
     'total_ttc', q.total_ttc,
+    'tva_rate', q.tva_rate,
     'total', q.total_ttc, -- Fallback
     'client_name', q.metadata->'client'->>'name',
     'client_email', q.metadata->'client'->>'email',
