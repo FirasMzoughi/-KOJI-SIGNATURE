@@ -7,13 +7,73 @@ import { Card } from '@/components/ui/Card';
 import { SignatureModal } from '@/components/features/SignatureModal';
 import { useState, useEffect, useRef } from 'react';
 import { formatDate, formatCurrency } from '@/lib/utils';
-import { Download, CheckCircle, Printer, Calendar, FileText, Share2, Eye, ShieldCheck, Clock, Paperclip, X, File as FileIcon, Send } from 'lucide-react';
+import { Download, CheckCircle, Printer, FileText, Share2, Eye, Clock, Paperclip, X, File as FileIcon, Send, MapPin } from 'lucide-react';
 import Image from 'next/image';
 import { Textarea } from '@/components/ui/Textarea';
+import type { QuoteLineItem } from '@/types';
 
 interface QuoteDetailViewProps {
   id: string;
   email?: string;
+}
+
+// Brand palette (matches the mobile devis screen).
+const NAVY = '#0F172A';
+const GOLD = '#A18B73';
+
+// Trade/lot accent colours, mirroring the mobile app's _familleColor().
+function familleColor(famille: string): string {
+  switch (famille.toLowerCase()) {
+    case 'carrelage': return '#B45309';
+    case 'peinture': return '#7C3AED';
+    case 'plomberie': return '#0369A1';
+    case 'electricité':
+    case 'electricite': return '#D97706';
+    case 'menuiserie': return '#166534';
+    case 'démolition':
+    case 'demolition': return '#B91C1C';
+    default: return '#475569';
+  }
+}
+
+// French label for the canonical room ids, like the mobile _getRoomLabel().
+function roomLabel(id: string): string {
+  switch (id) {
+    case 'salon': return 'Salon';
+    case 'cuisine': return 'Cuisine';
+    case 'chambre': return 'Chambre';
+    case 'salle_de_bain': return 'Salle de bain';
+    case 'bureau': return 'Bureau';
+    case 'exterieur': return 'Extérieur';
+    default:
+      if (!id) return 'Pièce';
+      return id.charAt(0).toUpperCase() + id.slice(1);
+  }
+}
+
+// French number, e.g. 1234.5 -> "1 234,50".
+function fmtNum(v: number): string {
+  return new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v);
+}
+
+// Reproduce the mobile line breakdown ("MO : …", "Fnt : …", or "Forfait : …").
+function lineBreakdown(item: QuoteLineItem): string[] {
+  const parts: string[] = [];
+  if (item.forfait) {
+    parts.push(`Forfait : ${fmtNum(item.unitPrice)} €`);
+    return parts;
+  }
+  const mo = (item.moUnitPrice ?? 0) * (item.quantity ?? 0);
+  const fnt = (item.fournituresUnitPrice ?? 0) * (item.quantity ?? 0);
+  if ((item.hours ?? 0) > 0 && (item.effectiveRate ?? 0) > 0) {
+    parts.push(`MO : ${fmtNum(item.quantity)} × ${fmtNum(item.hours!)} h × ${fmtNum(item.effectiveRate!)} € = ${fmtNum(mo)} €`);
+  } else if (mo > 0) {
+    parts.push(`MO : ${fmtNum(mo)} €`);
+  }
+  if (fnt > 0) {
+    parts.push(`Fnt : ${fmtNum(item.quantity)} × ${fmtNum(item.fournituresUnitPrice!)} € = ${fmtNum(fnt)} €`);
+  }
+  return parts;
 }
 
 export function QuoteDetailView({ id, email }: QuoteDetailViewProps) {
@@ -159,13 +219,26 @@ export function QuoteDetailView({ id, email }: QuoteDetailViewProps) {
   const tvaRate = quote.tvaRate ?? 20;
   const tvaAmount = totalTTC - totalHT;
 
-  // Group line items by room so the breakdown mirrors the generator's layout.
-  // Items with no room fall under an empty key and render without a heading.
-  const groupedItems = quote.items.reduce<Record<string, typeof quote.items>>((acc, item) => {
-    const key = item.room || '';
-    (acc[key] ||= []).push(item);
+  // Mirror the mobile devis layout: group line items by room, then by famille
+  // (lot) inside each room, computing the room subtotal as we go.
+  const rooms = quote.items.reduce<
+    Record<string, { lines: typeof quote.items; total: number }>
+  >((acc, item) => {
+    const key = item.room || 'Pièce';
+    (acc[key] ||= { lines: [], total: 0 });
+    acc[key].lines.push(item);
+    acc[key].total += (item.quantity || 0) * (item.unitPrice || 0);
     return acc;
   }, {});
+
+  const roomEntries = Object.entries(rooms).map(([name, { lines, total }]) => {
+    const byFamille = lines.reduce<Record<string, typeof quote.items>>((acc, line) => {
+      const fam = line.famille && line.famille.trim() ? line.famille : 'Général';
+      (acc[fam] ||= []).push(line);
+      return acc;
+    }, {});
+    return { name, total, byFamille };
+  });
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-8 font-sans">
@@ -177,7 +250,7 @@ export function QuoteDetailView({ id, email }: QuoteDetailViewProps) {
             <div>
               <div className="flex items-center gap-3 mb-2">
                 <Badge className="bg-primary/10 text-primary hover:bg-primary/20 border-none uppercase tracking-wider text-xs font-bold px-2 py-1">
-                  {quote.status}
+                  {isAccepted ? 'Accepté' : isRejected ? 'Refusé' : 'En attente'}
                 </Badge>
                 <span className="text-xs font-bold text-accent tracking-wider uppercase">DEVIS #{quote.id.substring(0, 8)}</span>
               </div>
@@ -205,96 +278,154 @@ export function QuoteDetailView({ id, email }: QuoteDetailViewProps) {
           {/* --- LEFT COLUMN (Document) --- */}
           <div className="md:col-span-2 space-y-6">
 
-            {/* Quote Document Card */}
-            <Card className="p-8 bg-[#ffffff] border-none space-y-8" id="quote-document">
-              {/* Header Row */}
-              <div className="flex justify-between items-start">
-                <div className="flex items-center gap-4">
-                  <div className="h-12 w-12 rounded-lg bg-[#F1F5F9] flex items-center justify-center">
-                    <ShieldCheck className="h-6 w-6 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-lg text-primary">Koji </h3>
-                    <p className="text-xs text-muted-foreground">contact@koji.com</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs font-bold text-accent uppercase mb-1">Date</p>
-                  <p className="text-sm font-semibold text-primary">{formatDate(quote.issuedDate)}</p>
-                </div>
+            {/* Quote Document Card — mirrors the mobile devis layout */}
+            <Card className="relative p-6 md:p-8 bg-white border-none space-y-6 overflow-hidden" id="quote-document">
+              {/* Koji logo watermark in the background */}
+              <div className="koji-watermark pointer-events-none absolute inset-0 flex items-center justify-center select-none">
+                <img src="/koji-mark.svg" alt="" aria-hidden className="w-2/3 max-w-[420px] opacity-[0.05]" />
               </div>
 
-              <div className="h-px bg-[#E2E8F0]" />
-
-              {/* Client Info */}
-              <div className="bg-[#FFF7ED] rounded-xl p-6 border border-[#F1F5F9]">
-                <div className="flex items-start gap-4">
-                  <div className="h-10 w-10 rounded-full bg-[#ffffff] flex items-center justify-center shadow-sm text-[#A18B73] font-bold">
-                    C
+              {/* Everything sits above the watermark */}
+              <div className="relative z-10 space-y-6">
+                {/* Header Row: brand + DEVIS N° */}
+                <div className="flex justify-between items-start gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="h-11 w-11 rounded-lg overflow-hidden flex items-center justify-center" style={{ backgroundColor: NAVY }}>
+                      <img src="/koji-mark.svg" alt="Koji" className="h-7 w-7" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-base" style={{ color: NAVY }}>Koji</h3>
+                      <p className="text-[11px] text-muted-foreground">contact@koji.com</p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-accent uppercase mb-1">Client</h4>
-                    <p className="font-bold text-primary text-lg">{quote.clientName}</p>
-                    <p className="text-sm text-muted-foreground">{quote.clientEmail}</p>
+                  <div className="rounded-lg px-3 py-1.5 text-center" style={{ backgroundColor: '#F3E5D8' }}>
+                    <p className="text-[8px] font-bold tracking-wide" style={{ color: GOLD }}>DEVIS N°</p>
+                    <p className="text-[11px] font-bold" style={{ color: NAVY }}>{quote.id.substring(0, 8).toUpperCase()}</p>
                   </div>
                 </div>
-              </div>
 
-              {/* Items Table — grouped by room when the data carries one */}
-              <div className="space-y-4">
-                <h4 className="text-sm font-bold text-primary uppercase tracking-wider">Détails du chantier</h4>
+                <div className="h-px bg-[#F3F4F6]" />
+
+                {/* Client / Date / Validité */}
+                <div className="flex justify-between gap-4">
+                  <div>
+                    <p className="text-[9px] font-bold tracking-wide" style={{ color: GOLD }}>CLIENT</p>
+                    <p className="font-bold text-sm" style={{ color: NAVY }}>{quote.clientName}</p>
+                    {quote.clientEmail && <p className="text-[11px] text-muted-foreground">{quote.clientEmail}</p>}
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[9px] font-bold tracking-wide" style={{ color: GOLD }}>DATE</p>
+                    <p className="text-xs font-semibold" style={{ color: NAVY }}>{formatDate(quote.issuedDate)}</p>
+                    <p className="text-[9px] font-bold tracking-wide mt-1" style={{ color: GOLD }}>VALIDITÉ</p>
+                    <p className="text-xs" style={{ color: NAVY }}>{quote.validUntil && quote.validUntil !== 'N/A' ? quote.validUntil : '—'}</p>
+                  </div>
+                </div>
+
+                {/* Travaux — site address */}
+                {quote.projectTitle && (
+                  <div className="rounded-lg p-3 flex items-center gap-2" style={{ backgroundColor: '#FFFBF6', border: '1px solid #F3E5D8' }}>
+                    <MapPin className="h-4 w-4 shrink-0" style={{ color: GOLD }} />
+                    <p className="text-xs font-semibold" style={{ color: NAVY }}>
+                      Lieu d&apos;exécution : {quote.projectTitle}
+                    </p>
+                  </div>
+                )}
+
+                {/* Room sections (room → famille → lines), like the mobile devis */}
                 <div className="space-y-5">
-                  {Object.entries(groupedItems).map(([room, lines]) => (
-                    <div key={room} className="space-y-2">
-                      {room && (
-                        <p className="text-xs font-bold text-accent uppercase tracking-wider">{room}</p>
-                      )}
-                      <div className="space-y-1">
-                        {lines.map((item, idx) => (
-                          <div key={idx} className="group flex justify-between items-start gap-4 py-3 border-b border-[#F1F5F9] last:border-none">
-                            <div className="space-y-1">
-                              <p className="font-semibold text-primary">{item.description}</p>
-                              <p className="text-xs text-muted-foreground">
-                                Quantité: {item.quantity}{item.unit ? ` ${item.unit}` : ''} • PU: {formatCurrency(item.unitPrice)}
-                              </p>
-                            </div>
-                            <p className="font-bold text-primary whitespace-nowrap">{formatCurrency(item.quantity * item.unitPrice)}</p>
-                          </div>
-                        ))}
+                  {roomEntries.map((room) => (
+                    <div key={room.name} className="rounded-2xl overflow-hidden border border-[#E2E8F0]">
+                      {/* Room header bar */}
+                      <div className="flex items-center justify-between px-4 py-3" style={{ backgroundColor: NAVY }}>
+                        <span className="font-bold text-sm text-white">{roomLabel(room.name)}</span>
+                        <span className="font-bold text-sm" style={{ color: '#EAD8B1' }}>{fmtNum(room.total)} €</span>
                       </div>
+
+                      {Object.entries(room.byFamille).map(([fam, lines]) => {
+                        const color = familleColor(fam);
+                        return (
+                          <div key={fam}>
+                            {/* LOT label */}
+                            <div className="flex items-center gap-2 px-4 py-2" style={{ backgroundColor: `${color}14` }}>
+                              <span className="inline-block w-[3px] h-3.5" style={{ backgroundColor: color }} />
+                              <span className="text-[11px] font-bold tracking-wide uppercase" style={{ color }}>{fam}</span>
+                            </div>
+
+                            {/* Lines */}
+                            {lines.map((item, idx) => {
+                              const lineTotal = (item.quantity || 0) * (item.unitPrice || 0);
+                              const breakdown = lineBreakdown(item);
+                              return (
+                                <div key={idx} className="px-3 py-3 border-t border-[#F1F5F9]">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="flex items-start gap-2">
+                                      {item.code && (
+                                        <span className="text-[10px] font-bold rounded px-1.5 py-0.5" style={{ color, backgroundColor: `${color}1A` }}>{item.code}</span>
+                                      )}
+                                      <span className="text-[13px] font-bold" style={{ color: NAVY }}>{item.description}</span>
+                                    </div>
+                                    <span className="text-[12px] font-bold text-white rounded-md px-2 py-1 whitespace-nowrap" style={{ backgroundColor: NAVY }}>{fmtNum(lineTotal)} €</span>
+                                  </div>
+                                  <p className="text-[11px] text-muted-foreground mt-1">
+                                    Qté : {fmtNum(item.quantity)} {item.unit || 'u'} • PU : {formatCurrency(item.unitPrice)}
+                                  </p>
+                                  {breakdown.length > 0 && (
+                                    <div className="mt-1 space-y-0.5">
+                                      {breakdown.map((p, i) => (
+                                        <p key={i} className="text-[10px] font-medium" style={{ color: '#94A3B8' }}>{p}</p>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })}
                     </div>
                   ))}
+                  {roomEntries.length === 0 && (
+                    <p className="text-center text-sm text-muted-foreground py-8">Aucune tâche ajoutée.</p>
+                  )}
                 </div>
-              </div>
 
-              {/* Financial Recap — uses the real totals from the generator */}
-              <div className="bg-[#F8FAFC] rounded-xl p-6 space-y-3">
-                <div className="flex justify-between text-sm text-muted-foreground">
-                  <span>Total HT</span>
-                  <span>{formatCurrency(totalHT)}</span>
-                </div>
-                <div className="flex justify-between text-sm text-muted-foreground">
-                  <span>TVA ({tvaRate}%)</span>
-                  <span>{formatCurrency(tvaAmount)}</span>
-                </div>
-                <div className="h-px bg-[#E2E8F0] my-2" />
-                <div className="flex justify-between items-end">
-                  <span className="font-bold text-primary">Total TTC</span>
-                  <span className="text-2xl font-bold text-primary">{formatCurrency(totalTTC)}</span>
-                </div>
-                <p className="text-xs text-center text-muted-foreground pt-2">Payable à la commande</p>
-              </div>
-
-              {/* Signature Display */}
-              {isAccepted && quote.signature && (
-                <div className="mt-8 pt-8 border-t border-dashed border-[#E2E8F0]">
-                  <p className="text-xs font-bold text-accent uppercase mb-4">Approbation client</p>
-                  <div className="relative h-24 w-full md:w-64 border rounded-xl bg-[#ffffff] overflow-hidden">
-                    <Image src={quote.signature} alt="Signature" fill className="object-contain p-4" />
+                {/* Totals — uses the real values from the generator */}
+                <div className="rounded-2xl border border-[#E2E8F0] overflow-hidden">
+                  <div className="h-px mx-4 my-2" style={{ backgroundColor: NAVY }} />
+                  <div className="flex justify-between items-center px-4 py-2.5">
+                    <span className="text-sm font-bold" style={{ color: NAVY }}>TOTAL DEVIS HT</span>
+                    <span className="text-base font-bold" style={{ color: NAVY }}>{fmtNum(totalHT)} €</span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-2">Signé le {quote.signedAt ? formatDate(quote.signedAt) : 'Date inconnue'}</p>
+                  <div className="h-px bg-[#E2E8F0] mx-4" />
+                  <div className="flex justify-between items-center px-4 py-2.5">
+                    <span className="text-[13px] text-muted-foreground">TVA {tvaRate}%</span>
+                    <span className="text-[13px] font-bold text-muted-foreground">{fmtNum(tvaAmount)} €</span>
+                  </div>
+                  <div className="m-4 rounded-xl px-4 py-3 flex justify-between items-center" style={{ backgroundColor: NAVY }}>
+                    <span className="font-bold text-white">TOTAL TTC</span>
+                    <span className="font-black text-2xl" style={{ color: '#EAD8B1' }}>{fmtNum(totalTTC)} €</span>
+                  </div>
+                  <p className="text-[11px] text-center text-muted-foreground pb-3">Payable à la commande</p>
                 </div>
-              )}
+
+                {/* Signature Display */}
+                {isAccepted && quote.signature && (
+                  <div className="mt-6 pt-6 border-t border-dashed border-[#E2E8F0]">
+                    <p className="text-[9px] font-bold tracking-wide uppercase mb-3" style={{ color: GOLD }}>Approbation client</p>
+                    <div className="relative h-24 w-full md:w-64 border rounded-xl bg-white overflow-hidden">
+                      <Image src={quote.signature} alt="Signature" fill className="object-contain p-4" />
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2">Signé le {quote.signedAt ? formatDate(quote.signedAt) : 'Date inconnue'}</p>
+                  </div>
+                )}
+
+                {/* "Créé par Koji" footer */}
+                <div className="pt-4 mt-2 border-t border-[#F1F5F9] flex items-center justify-center gap-1.5">
+                  <span className="text-[10px] text-muted-foreground">Créé par</span>
+                  <img src="/koji-mark.svg" alt="" aria-hidden className="h-3 w-3" />
+                  <span className="text-[10px] font-bold" style={{ color: NAVY }}>Koji</span>
+                </div>
+              </div>{/* /relative z-10 */}
             </Card>
 
             {/* Comments Section */}

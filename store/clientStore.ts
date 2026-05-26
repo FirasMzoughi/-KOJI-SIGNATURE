@@ -133,16 +133,27 @@ export const useClientStore = create<ClientState>((set, get) => ({
               // unit price is the sum of the two; the line total is unit × qty.
               // (For a "forfait" line, the whole flat price rides in
               // unit_price_ht at quantity 1, so the same maths still holds.)
-              const qty = Number(task.inputs?.quantity ?? task.quantity ?? 1) || 1;
-              const unitPrice =
-                Number(task.unit_price_ht || 0) + Number(task.total_price_ht || 0);
+              const inputs = task.inputs || {};
+              const qty = Number(inputs.quantity ?? task.quantity ?? 1) || 1;
+              const moUnit = Number(task.unit_price_ht || 0);
+              const fournUnit = Number(task.total_price_ht || 0);
+              const unitPrice = moUnit + fournUnit;
+              const taux = Number(inputs.tauxHoraire || 0);
+              const coeff = Number(inputs.conditionCoeff || 1) || 1;
               items.push({
                 id: task.id || task.task_id,
                 description: task.label || task.task_name || 'Tâche',
                 quantity: qty,
                 unitPrice,
-                unit: task.inputs?.unite || task.inputs?.unit || undefined,
+                unit: inputs.unite || inputs.unit || 'u',
                 room: room.name || undefined,
+                famille: inputs.famille || undefined,
+                code: inputs.code || undefined,
+                forfait: Boolean(inputs.forfaitEnabled) || (fournUnit === 0 && qty === 1 && !inputs.hours),
+                moUnitPrice: moUnit,
+                fournituresUnitPrice: fournUnit,
+                hours: Number(inputs.hours || 0),
+                effectiveRate: taux * coeff,
               });
             });
           }

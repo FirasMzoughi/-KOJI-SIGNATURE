@@ -61,3 +61,17 @@ body {
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-serif);
 }
+
+/* Keep the navy/gold devis bars and the Koji watermark visible when the quote
+   is exported to PDF or printed (browsers strip backgrounds by default). */
+#quote-document,
+#quote-document * {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+@media print {
+  body {
+    background: #ffffff;
+  }
+}

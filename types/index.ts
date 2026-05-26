@@ -42,6 +42,20 @@ export interface QuoteLineItem {
   unit?: string;
   /** Room/zone this line belongs to, so the client can see the grouping. */
   room?: string;
+  /** Trade/lot family (e.g. "Peinture", "Plomberie"), used for grouping. */
+  famille?: string;
+  /** Short task code shown as a badge, mirroring the mobile devis. */
+  code?: string;
+  /** Whether this is a flat-price (forfait) line. */
+  forfait?: boolean;
+  /** Per-unit labour (main d'œuvre) price, in € HT. */
+  moUnitPrice?: number;
+  /** Per-unit materials (fournitures) price, in € HT. */
+  fournituresUnitPrice?: number;
+  /** Hours per unit, used to print the MO breakdown like the mobile app. */
+  hours?: number;
+  /** Effective hourly rate (taux × coefficient), for the MO breakdown. */
+  effectiveRate?: number;
 }
 
 export interface Quote {

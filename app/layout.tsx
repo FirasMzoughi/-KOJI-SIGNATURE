@@ -28,7 +28,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={clsx(inter.variable, playfair.variable, 'antialiased')} suppressHydrationWarning>
+    <html lang="fr" className={clsx(inter.variable, playfair.variable, 'antialiased')} suppressHydrationWarning>
       <body className="bg-background text-foreground min-h-screen">
         <ThemeProvider
           attribute="class"
