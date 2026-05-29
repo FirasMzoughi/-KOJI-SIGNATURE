@@ -11,15 +11,24 @@ DECLARE
   v_quote json;
   v_rooms json;
 BEGIN
-  -- Authorize either by quote_id alone (when email is empty/null) or by id+email match.
-  -- The quote UUID acts as an unguessable token when email is not provided in the link.
+  -- Strict-when-email-exists authorization:
+  --   * If the quote has a client email on file, the visitor MUST supply a
+  --     matching email — a wrong or empty email is rejected.
+  --   * If the quote has NO email on file (e.g. links sent before the chantier
+  --     email feature), the unguessable quote UUID alone authorizes access.
   IF NOT EXISTS (
     SELECT 1 FROM quotes
     WHERE id = p_quote_id
       AND (
-        p_email IS NULL OR TRIM(p_email) = '' OR
-        LOWER(TRIM(client_email)) = LOWER(TRIM(p_email)) OR
-        LOWER(TRIM(metadata->'client'->>'email')) = LOWER(TRIM(p_email))
+        -- No email on file -> UUID alone authorizes (old links keep working).
+        COALESCE(
+          NULLIF(TRIM(client_email), ''),
+          NULLIF(TRIM(metadata->'client'->>'email'), '')
+        ) IS NULL
+        OR
+        -- Email on file -> the visitor's email must match it.
+        LOWER(TRIM(client_email)) = LOWER(TRIM(COALESCE(p_email, ''))) OR
+        LOWER(TRIM(metadata->'client'->>'email')) = LOWER(TRIM(COALESCE(p_email, '')))
       )
   ) THEN
     RETURN NULL;
@@ -78,7 +87,9 @@ AS $$
 DECLARE
   v_rows_updated integer;
 BEGIN
-  -- Update the quote if email matches, or if no email was provided (id-only access via unguessable UUID)
+  -- Strict-when-email-exists (same rule as get_quote_for_client):
+  --   * Quote has an email on file -> p_email must match it.
+  --   * Quote has no email on file -> the unguessable UUID alone authorizes.
   UPDATE quotes
   SET
     signature_data = p_signature_data,
@@ -86,9 +97,13 @@ BEGIN
     status = 'accepte'
   WHERE id = p_quote_id
     AND (
-      p_email IS NULL OR TRIM(p_email) = '' OR
-      LOWER(TRIM(client_email)) = LOWER(TRIM(p_email)) OR
-      LOWER(TRIM(metadata->'client'->>'email')) = LOWER(TRIM(p_email))
+      COALESCE(
+        NULLIF(TRIM(client_email), ''),
+        NULLIF(TRIM(metadata->'client'->>'email'), '')
+      ) IS NULL
+      OR
+      LOWER(TRIM(client_email)) = LOWER(TRIM(COALESCE(p_email, ''))) OR
+      LOWER(TRIM(metadata->'client'->>'email')) = LOWER(TRIM(COALESCE(p_email, '')))
     );
   
   -- Get the number of rows updated

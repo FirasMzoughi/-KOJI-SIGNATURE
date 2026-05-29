@@ -94,6 +94,19 @@ export function QuoteDetailView({ id, email }: QuoteDetailViewProps) {
   const [isSignModalOpen, setIsSignModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Email gate: when a devis has a client email on file, the RPC refuses to
+  // return it unless the visitor supplies the matching address. If the link was
+  // opened without (or with a wrong) email, we prompt for it and re-fetch.
+  const [emailInput, setEmailInput] = useState('');
+  const [emailAttempted, setEmailAttempted] = useState(false);
+  const handleEmailGateSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const entered = emailInput.trim();
+    if (!entered || !entered.includes('@')) return;
+    setEmailAttempted(true);
+    fetchQuote(id, entered);
+  };
+
   const handleSign = async (signatureData: string) => {
     if (!quote) return;
     await updateQuoteStatus(quote.id, 'Accepted', signatureData);
@@ -153,10 +166,47 @@ export function QuoteDetailView({ id, email }: QuoteDetailViewProps) {
     }
   };
   if (isLoading) return <div className="p-8 flex justify-center items-center h-screen text-primary">Chargement du devis...</div>;
-  if (error) return <div className="p-8 text-red-500">Erreur: {error}</div>;
 
-  if (!quote) {
-    return <div className="p-8">Quote not found</div>;
+  // Access denied or quote not yet loaded: present the email gate. Entering the
+  // address attached to the devis (the one set on the chantier) re-fetches it.
+  if (error || !quote) {
+    // Only flag a mismatch once the visitor has actually submitted an address;
+    // the first visit without an email param shouldn't look like a failure.
+    const denied = Boolean(error) && emailAttempted;
+    return (
+      <div className="min-h-[70vh] flex items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-md p-8 border-none shadow-sm bg-white space-y-5 text-center">
+          <div className="h-14 w-14 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto">
+            <FileText className="h-7 w-7" />
+          </div>
+          <div>
+            <h1 className="text-xl font-serif font-bold text-primary">Accéder à votre devis</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Entrez l&apos;adresse e-mail à laquelle ce devis vous a été envoyé pour l&apos;ouvrir.
+            </p>
+          </div>
+          <form onSubmit={handleEmailGateSubmit} className="space-y-3 text-left">
+            <input
+              type="email"
+              autoFocus
+              required
+              placeholder="votre@email.com"
+              value={emailInput}
+              onChange={(e) => setEmailInput(e.target.value)}
+              className="w-full h-12 rounded-xl border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 transition-all font-sans"
+            />
+            {denied && (
+              <p className="text-xs text-red-500">
+                Cette adresse ne correspond pas à ce devis. Vérifiez l&apos;e-mail communiqué par l&apos;entreprise.
+              </p>
+            )}
+            <Button type="submit" className="w-full h-12 bg-primary hover:bg-primary/90">
+              Ouvrir le devis
+            </Button>
+          </form>
+        </Card>
+      </div>
+    );
   }
 
   const handleDownload = async () => {
