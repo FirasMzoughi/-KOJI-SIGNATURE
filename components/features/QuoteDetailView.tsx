@@ -76,14 +76,24 @@ function lineBreakdown(item: QuoteLineItem): string[] {
   return parts;
 }
 
-export function QuoteDetailView({ id, email }: QuoteDetailViewProps) {
+// `email` is accepted (the link still carries it) but deliberately ignored —
+// see the useEffect below for why we never auto-open with a URL-supplied email.
+export function QuoteDetailView({ id }: QuoteDetailViewProps) {
   const { quotes, updateQuoteStatus, updateQuoteStartDate, addQuoteMessage, fetchQuote, isLoading, error } = useClientStore();
 
+  // SECURITY: we intentionally do NOT auto-open the devis with the email from
+  // the URL. The link carries the email only as a hint, so trusting it would
+  // let anyone with the link in. Instead we probe with an EMPTY email:
+  //   - devis with no email on file  -> RPC returns it -> opens (old links OK)
+  //   - devis with an email on file  -> RPC returns NULL -> we show the gate,
+  //                                     and only the email the visitor TYPES
+  //                                     can unlock it.
+  // (This relies on the strict get_quote_for_client RPC being deployed.)
   useEffect(() => {
     if (id) {
-      fetchQuote(id, email);
+      fetchQuote(id, '');
     }
-  }, [id, email, fetchQuote]);
+  }, [id, fetchQuote]);
 
   const quote = quotes.find((q) => q.id === id);
 
@@ -99,11 +109,16 @@ export function QuoteDetailView({ id, email }: QuoteDetailViewProps) {
   // opened without (or with a wrong) email, we prompt for it and re-fetch.
   const [emailInput, setEmailInput] = useState('');
   const [emailAttempted, setEmailAttempted] = useState(false);
+  // The address the visitor typed and that successfully unlocked the devis.
+  // Used as a client-side backstop so the devis stays hidden until a matching
+  // email is entered, even if the strict RPC is not (yet) deployed.
+  const [verifiedEmail, setVerifiedEmail] = useState<string | null>(null);
   const handleEmailGateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const entered = emailInput.trim();
     if (!entered || !entered.includes('@')) return;
     setEmailAttempted(true);
+    setVerifiedEmail(entered);
     fetchQuote(id, entered);
   };
 
@@ -167,12 +182,22 @@ export function QuoteDetailView({ id, email }: QuoteDetailViewProps) {
   };
   if (isLoading) return <div className="p-8 flex justify-center items-center h-screen text-primary">Chargement du devis...</div>;
 
-  // Access denied or quote not yet loaded: present the email gate. Entering the
-  // address attached to the devis (the one set on the chantier) re-fetches it.
-  if (error || !quote) {
+  // Client-side backstop: if the loaded devis carries a client email, require
+  // the visitor to have typed a matching one. This keeps the devis hidden even
+  // if the strict RPC has not been deployed yet (in which case the permissive
+  // RPC could return the quote on the empty-email probe).
+  const requiredEmail = (quote?.clientEmail ?? '').trim().toLowerCase();
+  const verifiedOk =
+    requiredEmail === '' ||
+    (verifiedEmail ?? '').trim().toLowerCase() === requiredEmail;
+
+  // Access denied, quote not yet loaded, or email required but not yet matched:
+  // present the email gate. Entering the address attached to the devis (the one
+  // set on the chantier) re-fetches it.
+  if (error || !quote || !verifiedOk) {
     // Only flag a mismatch once the visitor has actually submitted an address;
-    // the first visit without an email param shouldn't look like a failure.
-    const denied = Boolean(error) && emailAttempted;
+    // the first visit shouldn't look like a failure.
+    const denied = emailAttempted && (Boolean(error) || !verifiedOk);
     return (
       <div className="min-h-[70vh] flex items-center justify-center bg-background p-4">
         <Card className="w-full max-w-md p-8 border-none shadow-sm bg-white space-y-5 text-center">
