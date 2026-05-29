@@ -62,6 +62,8 @@ export interface Quote {
   id: string;
   clientName: string;
   clientEmail: string;
+  /** The entreprise (company) email on the devis. Also allowed to open it. */
+  companyEmail?: string;
   projectTitle: string;
   status: QuoteStatus;
   issuedDate: string;

@@ -195,6 +195,7 @@ export const useClientStore = create<ClientState>((set, get) => ({
         // Handle both camelCase (from accessors/views) and snake_case (raw tables)
         clientName: client.name || data.client_name || data.clientName || 'Client Inconnu',
         clientEmail: client.email || data.client_email || data.clientEmail || '',
+        companyEmail: (metadata.company && metadata.company.email) || data.company_email || '',
         projectTitle: metadata.siteAddress || data.project_title || data.projectTitle || 'Projet Koji',
         status: data.status,
         issuedDate: metadata.date || data.created_at || data.issuedDate,
