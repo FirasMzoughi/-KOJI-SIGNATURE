@@ -387,6 +387,14 @@ export function QuoteDetailView({ id }: QuoteDetailViewProps) {
   const isRejected = quote.status === 'Rejected' || quote.status === 'refuse';
   const canAct = !isAccepted && !isRejected;
 
+  // Entreprise (company) header — real values from the devis, falling back to
+  // the Koji defaults when a field is missing (e.g. older devis with no logo).
+  const company = quote.company ?? {};
+  const companyName = (company.name && company.name.trim()) || 'Koji';
+  const companyEmailDisplay =
+    (company.email && company.email.trim()) || 'contact@koji.com';
+  const companyLogo = (company.logo && company.logo.trim()) || '';
+
   // Real totals come straight from the generator. We display them as-is instead
   // of recomputing TVA from a single field (which previously double-taxed).
   const totalHT = quote.totalHT ?? quote.total ?? 0;
@@ -465,12 +473,19 @@ export function QuoteDetailView({ id }: QuoteDetailViewProps) {
                 {/* Header Row: brand + DEVIS N° */}
                 <div className="flex justify-between items-start gap-4">
                   <div className="flex items-center gap-3">
-                    <div className="h-11 w-11 rounded-lg overflow-hidden flex items-center justify-center" style={{ backgroundColor: NAVY }}>
-                      <img src="/koji-mark.svg" alt="Koji" className="h-7 w-7" />
+                    <div className="h-11 w-11 rounded-lg overflow-hidden flex items-center justify-center" style={{ backgroundColor: companyLogo ? '#FFFFFF' : NAVY }}>
+                      {companyLogo ? (
+                        <img src={companyLogo} alt={companyName} className="h-full w-full object-cover" />
+                      ) : (
+                        <img src="/koji-mark.svg" alt={companyName} className="h-7 w-7" />
+                      )}
                     </div>
                     <div>
-                      <h3 className="font-bold text-base" style={{ color: NAVY }}>Koji</h3>
-                      <p className="text-[11px] text-muted-foreground">contact@koji.com</p>
+                      <h3 className="font-bold text-base" style={{ color: NAVY }}>{companyName}</h3>
+                      <p className="text-[11px] text-muted-foreground">{companyEmailDisplay}</p>
+                      {company.phone && company.phone.trim() && (
+                        <p className="text-[11px] text-muted-foreground">{company.phone}</p>
+                      )}
                     </div>
                   </div>
                   <div className="rounded-lg px-3 py-1.5 text-center" style={{ backgroundColor: '#F3E5D8' }}>
@@ -591,6 +606,24 @@ export function QuoteDetailView({ id }: QuoteDetailViewProps) {
                       <Image src={quote.signature} alt="Signature" fill className="object-contain p-4" />
                     </div>
                     <p className="text-xs text-muted-foreground mt-2">Signé le {quote.signedAt ? formatDate(quote.signedAt) : 'Date inconnue'}</p>
+                  </div>
+                )}
+
+                {/* Entreprise legal / contact footer (shown when provided). */}
+                {(company.address || company.siret || company.rcs || company.tva || company.formeJuridique) && (
+                  <div className="pt-4 mt-2 border-t border-[#F1F5F9] space-y-1">
+                    <p className="text-[9px] font-bold tracking-wide uppercase" style={{ color: GOLD }}>{companyName}</p>
+                    {company.address && company.address.trim() && (
+                      <p className="text-[10px] text-muted-foreground whitespace-pre-line">{company.address}</p>
+                    )}
+                    <p className="text-[10px] text-muted-foreground">
+                      {[
+                        company.formeJuridique && company.formeJuridique.trim() ? company.formeJuridique : null,
+                        company.siret && company.siret.trim() ? `SIRET : ${company.siret}` : null,
+                        company.rcs && company.rcs.trim() ? `RCS : ${company.rcs}` : null,
+                        company.tva && company.tva.trim() ? `TVA : ${company.tva}` : null,
+                      ].filter(Boolean).join('  ·  ')}
+                    </p>
                   </div>
                 )}
 

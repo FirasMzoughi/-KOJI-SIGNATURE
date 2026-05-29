@@ -58,10 +58,26 @@ export interface QuoteLineItem {
   effectiveRate?: number;
 }
 
+/** Entreprise (company) details shown in the devis header. */
+export interface CompanyInfo {
+  name?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  siret?: string;
+  rcs?: string;
+  tva?: string;
+  formeJuridique?: string;
+  /** Public URL of the company logo. */
+  logo?: string;
+}
+
 export interface Quote {
   id: string;
   clientName: string;
   clientEmail: string;
+  /** The entreprise that issued the devis (from metadata.company). */
+  company?: CompanyInfo;
   projectTitle: string;
   status: QuoteStatus;
   issuedDate: string;

@@ -190,11 +190,23 @@ export const useClientStore = create<ClientState>((set, get) => ({
         Number(data.total_ttc ?? metadata.total_ttc ?? 0) ||
         totalHT * (1 + tvaRate / 100);
 
+      const company = metadata.company || {};
       const mappedQuote: Quote = {
         id: data.id,
         // Handle both camelCase (from accessors/views) and snake_case (raw tables)
         clientName: client.name || data.client_name || data.clientName || 'Client Inconnu',
         clientEmail: client.email || data.client_email || data.clientEmail || '',
+        company: {
+          name: company.name || '',
+          email: company.email || '',
+          phone: company.phone || '',
+          address: company.address || '',
+          siret: company.siret || '',
+          rcs: company.rcs || '',
+          tva: company.tva || '',
+          formeJuridique: company.formeJuridique || '',
+          logo: company.logo || '',
+        },
         projectTitle: metadata.siteAddress || data.project_title || data.projectTitle || 'Projet Koji',
         status: data.status,
         issuedDate: metadata.date || data.created_at || data.issuedDate,
