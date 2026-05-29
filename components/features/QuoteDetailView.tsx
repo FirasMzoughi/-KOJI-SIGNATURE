@@ -129,12 +129,27 @@ export function QuoteDetailView({ id }: QuoteDetailViewProps) {
   // Google sign-in: send the visitor to Google, then back to THIS devis URL.
   // On return the Supabase client picks up the session (detectSessionInUrl),
   // and the effect below auto-verifies the devis with the Google email.
+  //
+  // IMPORTANT: the target below must be in Supabase → Authentication → URL
+  // Configuration → Redirect URLs. If it is not, Supabase ignores it and
+  // falls back to the project "Site URL" (which is the koji-admin app), which
+  // is why Google sign-in was landing on "Connexion Admin". Set
+  // NEXT_PUBLIC_SITE_URL to this app's origin (e.g.
+  // https://koji-signature.vercel.app) and allowlist it in Supabase.
   const [googleLoading, setGoogleLoading] = useState(false);
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
     try {
-      const redirectTo =
-        typeof window !== 'undefined' ? window.location.href : undefined;
+      // Build a clean return URL: this app's origin + the devis path/query
+      // (no hash), preferring an explicit configured origin so it always
+      // matches the Supabase allowlist regardless of the current host.
+      let redirectTo: string | undefined;
+      if (typeof window !== 'undefined') {
+        const origin =
+          process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, '') ||
+          window.location.origin;
+        redirectTo = `${origin}${window.location.pathname}${window.location.search}`;
+      }
       const { error: oauthError } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo },
