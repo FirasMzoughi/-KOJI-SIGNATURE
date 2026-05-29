@@ -14,8 +14,6 @@ BEGIN
   -- Strict-when-email-exists authorization:
   --   * If the quote has a client email on file, the visitor MUST supply a
   --     matching email — a wrong or empty email is rejected.
-  --   * The entreprise (company) email on the quote is ALSO accepted, so the
-  --     company that created the devis can always open it.
   --   * If the quote has NO email on file (e.g. links sent before the chantier
   --     email feature), the unguessable quote UUID alone authorizes access.
   IF NOT EXISTS (
@@ -28,11 +26,9 @@ BEGIN
           NULLIF(TRIM(metadata->'client'->>'email'), '')
         ) IS NULL
         OR
-        -- Client email matches.
+        -- Email on file -> the visitor's email must match it.
         LOWER(TRIM(client_email)) = LOWER(TRIM(COALESCE(p_email, ''))) OR
-        LOWER(TRIM(metadata->'client'->>'email')) = LOWER(TRIM(COALESCE(p_email, ''))) OR
-        -- Company (entreprise) email matches.
-        LOWER(TRIM(metadata->'company'->>'email')) = LOWER(TRIM(COALESCE(p_email, '')))
+        LOWER(TRIM(metadata->'client'->>'email')) = LOWER(TRIM(COALESCE(p_email, '')))
       )
   ) THEN
     RETURN NULL;
@@ -66,7 +62,6 @@ BEGIN
     'total', q.total_ttc, -- Fallback
     'client_name', q.metadata->'client'->>'name',
     'client_email', q.metadata->'client'->>'email',
-    'company_email', q.metadata->'company'->>'email',
     'signature_data', q.signature_data,
     'signed_at', q.signed_at,
     'quote_rooms', v_rooms
@@ -93,8 +88,7 @@ DECLARE
   v_rows_updated integer;
 BEGIN
   -- Strict-when-email-exists (same rule as get_quote_for_client):
-  --   * Quote has an email on file -> p_email must match the client OR the
-  --     company (entreprise) email.
+  --   * Quote has an email on file -> p_email must match it.
   --   * Quote has no email on file -> the unguessable UUID alone authorizes.
   UPDATE quotes
   SET
@@ -109,8 +103,7 @@ BEGIN
       ) IS NULL
       OR
       LOWER(TRIM(client_email)) = LOWER(TRIM(COALESCE(p_email, ''))) OR
-      LOWER(TRIM(metadata->'client'->>'email')) = LOWER(TRIM(COALESCE(p_email, ''))) OR
-      LOWER(TRIM(metadata->'company'->>'email')) = LOWER(TRIM(COALESCE(p_email, '')))
+      LOWER(TRIM(metadata->'client'->>'email')) = LOWER(TRIM(COALESCE(p_email, '')))
     );
   
   -- Get the number of rows updated

@@ -236,18 +236,13 @@ export function QuoteDetailView({ id }: QuoteDetailViewProps) {
   if (isLoading) return <div className="p-8 flex justify-center items-center h-screen text-primary">Chargement du devis...</div>;
 
   // Client-side backstop: if the loaded devis carries a client email, require
-  // the visitor to have typed/authenticated a matching one. This keeps the devis
-  // hidden even if the strict RPC has not been deployed yet (in which case the
-  // permissive RPC could return the quote on the empty-email probe).
-  // The entreprise (company) email is ALSO accepted, so the company that created
-  // the devis can open it with its own email.
+  // the visitor to have typed a matching one. This keeps the devis hidden even
+  // if the strict RPC has not been deployed yet (in which case the permissive
+  // RPC could return the quote on the empty-email probe).
   const requiredEmail = (quote?.clientEmail ?? '').trim().toLowerCase();
-  const companyEmail = (quote?.companyEmail ?? '').trim().toLowerCase();
-  const submitted = (verifiedEmail ?? '').trim().toLowerCase();
   const verifiedOk =
     requiredEmail === '' ||
-    submitted === requiredEmail ||
-    (companyEmail !== '' && submitted === companyEmail);
+    (verifiedEmail ?? '').trim().toLowerCase() === requiredEmail;
 
   // Access denied, quote not yet loaded, or email required but not yet matched:
   // present the email gate. Entering the address attached to the devis (the one
