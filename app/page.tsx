@@ -33,7 +33,7 @@ function HomeContent() {
     <div className="min-h-screen flex items-center justify-center bg-background">
       <div className="animate-pulse flex flex-col items-center gap-4">
         <div className="h-8 w-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
-        <p className="text-sm text-muted-foreground font-medium">Chargement Koji...</p>
+        <p className="text-sm text-muted-foreground font-medium">Chargement de votre espace Koji Client...</p>
       </div>
     </div>
   );

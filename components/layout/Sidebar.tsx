@@ -15,6 +15,14 @@ export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const logout = useClientStore((s) => s.logout);
+  const user = useClientStore((s) => s.user);
+
+  const initials = (user?.name || user?.email || 'C')
+    .split(/[\s@.]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? '')
+    .join('') || 'C';
 
   const handleLogout = async () => {
     await logout();
@@ -29,8 +37,8 @@ export function Sidebar() {
             <img src="/logo.png" alt="Koji" className="w-full h-full object-contain p-1" />
           </div>
           <div>
-            <p className="text-sm font-bold text-gray-900 leading-tight">Koji Admin</p>
-            <p className="text-xs text-gray-500">Editorial Admin</p>
+            <p className="text-sm font-bold text-gray-900 leading-tight">Koji Client</p>
+            <p className="text-xs text-gray-500">Espace personnel</p>
           </div>
         </Link>
       </div>
@@ -58,6 +66,19 @@ export function Sidebar() {
       </nav>
 
       <div className="px-4 pb-6 space-y-1 border-t border-gray-200/60 pt-4">
+        {user && (
+          <div className="flex items-center gap-3 px-2 py-2 mb-1">
+            <div className="h-9 w-9 rounded-full bg-[#1D5FE1] text-white flex items-center justify-center text-xs font-bold shrink-0">
+              {initials}
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-gray-900 truncate">
+                {user.name || 'Mon compte'}
+              </p>
+              <p className="text-xs text-gray-500 truncate">{user.email}</p>
+            </div>
+          </div>
+        )}
         <Link
           href="/client/settings"
           className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-gray-600 hover:bg-white hover:text-gray-900 transition-colors"

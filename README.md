@@ -1,13 +1,13 @@
-# Koji
+# Koji Client
 
-La solution de gestion tout-en-un pour les artisans.
+L'espace client en ligne de Koji : vos devis, leur suivi et leur signature.
 
 ## Fonctionnalités
 
-- **Devis & Factures** : Créez et envoyez des documents professionnels.
-- **Suivi de Chantier** : Validation en ligne et pilotage projet.
-- **Actions Client** : Choix des matériaux et signatures.
-- **Propulsé par l'IA** : Saisie automatique et extraction de données.
+- **Mes Devis** : Consultez tous les devis qui vous sont adressés (liés à votre e-mail).
+- **Signature en ligne** : Signez vos devis en quelques secondes, avec valeur juridique.
+- **Suivi** : Suivez le statut de vos demandes en temps réel.
+- **Messagerie** : Échangez directement avec votre artisan.
 
 ## Getting Started
 

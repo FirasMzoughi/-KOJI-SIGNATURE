@@ -8,7 +8,7 @@ import { Header } from '@/components/layout/Header';
 import { Wallet, ClipboardList, Lightbulb, Filter, Download, Eye, Rocket, Phone, MessageCircle, Loader2, FileText } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { useClientStore } from '@/store/clientStore';
-import { fetchUserQuotes, classifyStatus, type QuoteRecord } from '@/lib/quotesRepository';
+import { fetchClientQuotesByEmail, classifyStatus, type QuoteRecord } from '@/lib/quotesRepository';
 
 const statusBadge: Record<string, { label: string; className: string }> = {
   signed: { label: 'Signé', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
@@ -33,15 +33,17 @@ export default function ClientDashboard() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!authReady || !user?.id) return;
+    if (!authReady || !user?.email) return;
     let cancelled = false;
     setLoading(true);
-    fetchUserQuotes(user.id)
+    // Match the client's devis by their login email (via chantiers.client_email),
+    // NOT by user_id — quotes.user_id is the entreprise, never the client.
+    fetchClientQuotesByEmail(user.email)
       .then((data) => { if (!cancelled) { setQuotes(data); setError(null); } })
       .catch((e) => { if (!cancelled) setError(e.message || 'Erreur de chargement'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [authReady, user?.id]);
+  }, [authReady, user?.email]);
 
   const totalEstimate = useMemo(
     () => quotes.reduce((sum, q) => sum + (q.total_ttc || 0), 0),
@@ -52,6 +54,29 @@ export default function ClientDashboard() {
     () => quotes.filter((q) => classifyStatus(q.status) === 'pending').length,
     [quotes]
   );
+
+  // Derive the artisan (entreprise) from the most recent devis' company snapshot
+  // so the "conseiller" card shows the real contact instead of a placeholder.
+  const artisan = useMemo(() => {
+    for (const q of quotes) {
+      const c = q.company || {};
+      if (c.name || c.email || c.phone) {
+        return {
+          name: c.name || 'Votre artisan',
+          email: c.email || '',
+          phone: c.phone || '',
+        };
+      }
+    }
+    return null;
+  }, [quotes]);
+
+  const artisanInitials = (artisan?.name || 'KO')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]?.toUpperCase() ?? '')
+    .join('') || 'KO';
 
   return (
     <div className="flex flex-col">
@@ -191,22 +216,26 @@ export default function ClientDashboard() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pb-10">
           <div className="bg-white border border-gray-100 rounded-2xl p-6 flex items-center gap-5 shadow-[0_4px_20px_rgb(0,0,0,0.03)]">
             <div className="relative shrink-0">
-              <div className="h-16 w-16 rounded-full bg-gradient-to-br from-emerald-300 to-emerald-500 flex items-center justify-center text-white font-bold text-lg">
-                SD
+              <div className="h-16 w-16 rounded-full bg-gradient-to-br from-[#1D5FE1] to-[#0E172C] flex items-center justify-center text-white font-bold text-lg">
+                {artisanInitials}
               </div>
               <div className="absolute bottom-0 right-0 h-4 w-4 rounded-full bg-emerald-500 border-2 border-white" />
             </div>
-            <div className="flex-1">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Votre conseiller dédié</p>
-              <p className="text-base font-bold text-gray-900 mt-1">Sophie Danvers</p>
-              <p className="text-xs text-gray-500">Disponible pour discuter de vos projets actuels.</p>
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Votre artisan</p>
+              <p className="text-base font-bold text-gray-900 mt-1 truncate">{artisan?.name || 'Votre artisan'}</p>
+              <p className="text-xs text-gray-500 truncate">
+                {artisan?.email || 'Disponible pour discuter de vos projets.'}
+              </p>
               <div className="flex items-center gap-2 mt-3">
                 <Link href="/client/messages" className="flex items-center gap-2 px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg text-xs font-semibold text-gray-700 transition-colors">
                   <MessageCircle className="w-3.5 h-3.5" /> Envoyer un message
                 </Link>
-                <button className="flex items-center gap-2 px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg text-xs font-semibold text-gray-700 transition-colors">
-                  <Phone className="w-3.5 h-3.5" /> Appeler
-                </button>
+                {artisan?.phone && (
+                  <a href={`tel:${artisan.phone}`} className="flex items-center gap-2 px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg text-xs font-semibold text-gray-700 transition-colors">
+                    <Phone className="w-3.5 h-3.5" /> Appeler
+                  </a>
+                )}
               </div>
             </div>
           </div>

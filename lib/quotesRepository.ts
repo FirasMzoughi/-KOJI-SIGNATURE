@@ -118,6 +118,48 @@ export async function fetchUserQuotes(userId: string): Promise<QuoteRecord[]> {
   return (data as RawQuote[] | null)?.map(mapQuote) ?? [];
 }
 
+/**
+ * Fetch every devis addressed to a CLIENT, matched by the client's email.
+ *
+ * A client account never owns quotes — `quotes.user_id` is the *entreprise*
+ * owner. The client is linked only by the email the entreprise typed into
+ * `chantiers.client_email` when creating the chantier. Quotes attach to a
+ * chantier via `quotes.chantier_id`, so a client finds their devis by:
+ *   1. selecting the chantiers whose `client_email` == their login email,
+ *   2. loading every quote attached to those chantiers.
+ *
+ * NOTE: the dashboard previously called `fetchUserQuotes(user.id)`, which
+ * filtered by `user_id` and therefore returned NOTHING for a client. This is
+ * the correct, email-scoped replacement. Reading the matching rows requires the
+ * client RLS policies (see koji-main/supabase/client_access.sql); without them
+ * this resolves to an empty list rather than throwing.
+ */
+export async function fetchClientQuotesByEmail(email: string): Promise<QuoteRecord[]> {
+  const clientEmail = (email || '').trim().toLowerCase();
+  if (!clientEmail) return [];
+
+  // 1. Chantiers addressed to this client (case-insensitive email match).
+  const { data: chantiers, error: chantierError } = await supabase
+    .from('chantiers')
+    .select('id')
+    .ilike('client_email', clientEmail);
+
+  if (chantierError) throw chantierError;
+
+  const chantierIds = (chantiers as Array<{ id: string }> | null)?.map((c) => c.id) ?? [];
+  if (chantierIds.length === 0) return [];
+
+  // 2. Quotes attached to those chantiers.
+  const { data, error } = await supabase
+    .from('quotes')
+    .select('*')
+    .in('chantier_id', chantierIds)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return (data as RawQuote[] | null)?.map(mapQuote) ?? [];
+}
+
 export async function fetchQuoteById(quoteId: string): Promise<QuoteRecord | null> {
   const { data, error } = await supabase
     .from('quotes')

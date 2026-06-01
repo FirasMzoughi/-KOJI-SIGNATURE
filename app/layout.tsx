@@ -18,8 +18,8 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: 'Koji',
-  description: 'Professional spaces & finishes.',
+  title: 'Koji Client',
+  description: 'Votre espace client Koji — consultez et signez vos devis en ligne.',
 };
 
 export default function RootLayout({

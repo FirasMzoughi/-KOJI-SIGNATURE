@@ -61,7 +61,7 @@ export default function SignupPage() {
             <img src="/logo.png" alt="Koji Logo" className="w-full h-full object-contain p-1.5" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">Créer un compte</h1>
-          <p className="text-sm text-gray-500">Inscrivez-vous pour gérer vos devis Koji</p>
+          <p className="text-sm text-gray-500">Votre espace client Koji — suivez et signez vos devis</p>
         </div>
 
         <form onSubmit={handleSignup} className="space-y-6">
