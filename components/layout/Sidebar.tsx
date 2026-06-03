@@ -2,12 +2,13 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { FileText, MessageSquare, Settings, LogOut } from 'lucide-react';
+import { FileText, MessageSquare, Settings, LogOut, HardHat } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useClientStore } from '@/store/clientStore';
 
 const navItems = [
   { href: '/client', label: 'Devis', icon: FileText, match: ['/client', '/client/quotes'] },
+  { href: '/client/tasks', label: 'Suivi travaux', icon: HardHat, match: ['/client/tasks'] },
   { href: '/client/messages', label: 'Messages', icon: MessageSquare, match: ['/client/messages'] },
 ];
 

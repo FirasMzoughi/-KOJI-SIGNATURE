@@ -160,6 +160,80 @@ export async function fetchClientQuotesByEmail(email: string): Promise<QuoteReco
   return (data as RawQuote[] | null)?.map(mapQuote) ?? [];
 }
 
+// ── Works follow-up (chantier_tasks) ─────────────────────────────────────────
+
+export interface ChantierTask {
+  id: string;
+  label: string;
+  is_done: boolean;
+  created_at: string;
+}
+
+/** One chantier's works, with a completion ratio for the progress bar. */
+export interface ChantierProgress {
+  chantierId: string;
+  reference: string;
+  tasks: ChantierTask[];
+  done: number;
+  total: number;
+  /** 0..1 */
+  progress: number;
+}
+
+/**
+ * The works (chantier_tasks) for every chantier addressed to this client,
+ * grouped per chantier with a completion percentage — so the client can follow
+ * progress ("X% réalisé"). Read-only; only the entreprise edits tasks.
+ *
+ * Matched by email exactly like the devis (chantiers.client_email). Requires the
+ * client RLS policies (koji-main/supabase/client_access.sql); without them this
+ * returns an empty list rather than throwing.
+ */
+export async function fetchClientTasksByEmail(email: string): Promise<ChantierProgress[]> {
+  const clientEmail = (email || '').trim().toLowerCase();
+  if (!clientEmail) return [];
+
+  const { data: chantiers, error: chantierError } = await supabase
+    .from('chantiers')
+    .select('id, reference')
+    .ilike('client_email', clientEmail);
+  if (chantierError) throw chantierError;
+
+  const rows = (chantiers as Array<{ id: string; reference: string | null }> | null) ?? [];
+  if (rows.length === 0) return [];
+
+  const refById = new Map(rows.map((c) => [c.id, c.reference || 'Chantier']));
+
+  const { data: tasks, error: taskError } = await supabase
+    .from('chantier_tasks')
+    .select('id, chantier_id, label, is_done, created_at')
+    .in('chantier_id', rows.map((c) => c.id))
+    .order('created_at', { ascending: true });
+  if (taskError) throw taskError;
+
+  const grouped = new Map<string, ChantierTask[]>();
+  for (const t of (tasks as Array<ChantierTask & { chantier_id: string }> | null) ?? []) {
+    const list = grouped.get(t.chantier_id) ?? [];
+    list.push({ id: t.id, label: t.label, is_done: t.is_done, created_at: t.created_at });
+    grouped.set(t.chantier_id, list);
+  }
+
+  const result: ChantierProgress[] = [];
+  for (const [chantierId, list] of grouped) {
+    const total = list.length;
+    const done = list.filter((t) => t.is_done).length;
+    result.push({
+      chantierId,
+      reference: refById.get(chantierId) ?? 'Chantier',
+      tasks: list,
+      done,
+      total,
+      progress: total === 0 ? 0 : done / total,
+    });
+  }
+  return result;
+}
+
 export async function fetchQuoteById(quoteId: string): Promise<QuoteRecord | null> {
   const { data, error } = await supabase
     .from('quotes')
