@@ -231,7 +231,7 @@ export function QuoteDetailView({ id, email }: QuoteDetailViewProps) {
         <Card className="w-full max-w-md p-8 border-none shadow-sm bg-white space-y-5">
           <div className="text-center space-y-3">
             <div className="h-14 w-14 rounded-2xl bg-[#0E172C] flex items-center justify-center mx-auto overflow-hidden">
-              <img src="/logo.png" alt="Koji" className="w-full h-full object-contain p-1.5" />
+              <img src="/koji-mark.svg" alt="Koji" className="w-full h-full object-contain p-2.5" />
             </div>
             <div>
               <h1 className="text-xl font-bold text-gray-900">Connexion à votre espace</h1>

@@ -34,7 +34,7 @@ export function Sidebar() {
       <div className="px-6 pt-8 pb-10">
         <Link href="/client" className="flex items-center gap-3">
           <div className="h-11 w-11 bg-[#0E172C] rounded-xl flex items-center justify-center shadow-md overflow-hidden">
-            <img src="/logo.png" alt="Koji" className="w-full h-full object-contain p-1" />
+            <img src="/koji-mark.svg" alt="Koji" className="w-full h-full object-contain p-2" />
           </div>
           <div>
             <p className="text-sm font-bold text-gray-900 leading-tight">Koji Client</p>

@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic';
 import { useEffect, useState, useMemo } from 'react';
 import Link from 'next/link';
 import { Header } from '@/components/layout/Header';
-import { Wallet, ClipboardList, Lightbulb, Filter, Download, Eye, Rocket, Phone, MessageCircle, Loader2, FileText } from 'lucide-react';
+import { Wallet, ClipboardList, Lightbulb, Eye, Rocket, Phone, MessageCircle, Loader2, FileText } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { useClientStore } from '@/store/clientStore';
 import { fetchClientQuotesByEmail, classifyStatus, type QuoteRecord } from '@/lib/quotesRepository';
@@ -125,24 +125,16 @@ export default function ClientDashboard() {
               <Lightbulb className="w-5 h-5" />
             </div>
             <p className="text-lg font-bold mt-6 leading-tight">Besoin d&apos;un<br />accompagnement ?</p>
-            <p className="text-xs text-white/80 mt-2">Nos experts sont disponibles pour vous accompagner sur vos projets.</p>
-            <button className="mt-4 px-4 py-2 bg-white/15 hover:bg-white/25 backdrop-blur-sm rounded-lg text-sm font-semibold transition-colors">
-              Prendre RDV
-            </button>
+            <p className="text-xs text-white/80 mt-2">Votre artisan est disponible pour vous accompagner sur vos projets.</p>
+            <Link href="/client/messages" className="mt-4 inline-flex px-4 py-2 bg-white/15 hover:bg-white/25 backdrop-blur-sm rounded-lg text-sm font-semibold transition-colors">
+              Contacter mon artisan
+            </Link>
           </div>
         </div>
 
         <div className="bg-white border border-gray-100 rounded-2xl shadow-[0_4px_20px_rgb(0,0,0,0.03)] overflow-hidden">
           <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
             <h3 className="text-base font-bold text-gray-900">Historique des devis</h3>
-            <div className="flex items-center gap-2">
-              <button className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 rounded-lg transition-colors">
-                <Filter className="w-4 h-4" /> Filtrer
-              </button>
-              <button className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-50 rounded-lg transition-colors">
-                <Download className="w-4 h-4" /> Exporter
-              </button>
-            </div>
           </div>
 
           {loading ? (

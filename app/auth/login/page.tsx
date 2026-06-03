@@ -36,7 +36,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md p-8 space-y-8 bg-white rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-gray-100">
         <div className="text-center space-y-2">
           <div className="h-14 w-14 bg-[#0E172C] rounded-2xl mx-auto flex items-center justify-center mb-6 border border-gray-800 shadow-xl overflow-hidden">
-            <img src="/logo.png" alt="Koji Logo" className="w-full h-full object-contain p-1.5" />
+            <img src="/koji-mark.svg" alt="Koji" className="w-full h-full object-contain p-2.5" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">Connexion</h1>
           <p className="text-sm text-gray-500">Entrez vos identifiants pour accéder à vos devis</p>

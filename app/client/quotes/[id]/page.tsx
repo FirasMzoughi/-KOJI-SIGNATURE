@@ -2,7 +2,7 @@
 
 import { useState, use, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Download, Pencil, ZoomIn, ZoomOut, History, Send, Link2, Plus, Lightbulb, Clock, Loader2, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Pencil, History, Send, Link2, Plus, Lightbulb, Clock, Loader2, CheckCircle2 } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { SignatureModal } from '@/components/features/SignatureModal';
 import { SuccessModal } from '@/components/features/SuccessModal';
@@ -134,30 +134,22 @@ export default function QuoteDetailPage({ params }: { params: Promise<{ id: stri
               <span className="text-xs text-gray-500">Modifié le {formatDateTime(quote.updated_at)}</span>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <button className="flex items-center gap-2 px-5 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 rounded-xl text-sm font-semibold text-gray-700 transition-colors">
-              <Download className="w-4 h-4" /> Télécharger PDF
-            </button>
-            {!isSigned && (
+          {!isSigned && (
+            <div className="flex items-center gap-3">
               <button
                 onClick={() => setSignOpen(true)}
                 className="flex items-center gap-2 px-5 py-2.5 bg-[#1D5FE1] hover:bg-blue-700 text-white rounded-xl text-sm font-bold shadow-lg shadow-[#1D5FE1]/30 transition-colors"
               >
                 <Pencil className="w-4 h-4" /> Signer le Devis
               </button>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">
           <div className="bg-gray-50/40 border border-gray-100 rounded-2xl p-6">
             <div className="flex items-center justify-between mb-5">
               <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">Prévisualisation du document</p>
-              <div className="flex items-center gap-2 text-gray-400">
-                <button className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-gray-100"><ZoomOut className="w-4 h-4" /></button>
-                <span className="text-xs font-semibold text-gray-600">100%</span>
-                <button className="h-7 w-7 flex items-center justify-center rounded-md hover:bg-gray-100"><ZoomIn className="w-4 h-4" /></button>
-              </div>
             </div>
 
             <div className="bg-white rounded-xl shadow-sm p-10 max-w-3xl mx-auto">
