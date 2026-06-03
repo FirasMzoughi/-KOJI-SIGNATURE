@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
 import { Header } from '@/components/layout/Header';
 import { useClientStore } from '@/store/clientStore';
 import { fetchClientTasksByEmail, type ChantierProgress } from '@/lib/quotesRepository';
-import { HardHat, CheckCircle2, Circle, Loader2, ListChecks } from 'lucide-react';
+import { HardHat, CheckCircle2, Circle, Loader2, ListChecks, Dot } from 'lucide-react';
 
 export default function TasksPage() {
   const user = useClientStore((s) => s.user);
@@ -122,20 +122,28 @@ function ChantierCard({ group }: { group: ChantierProgress }) {
         {finished ? 'Travaux terminés 🎉' : `${pct}% réalisé`}
       </p>
 
-      {/* Task list */}
+      {/* Task list. Devis tasks (from the quote) show their room; manual
+          checklist tasks show a done/▢ state — mirroring koji-main's "À faire". */}
       <div className="mt-4 border-t border-gray-100 divide-y divide-gray-50">
         {group.tasks.map((t) => (
           <div key={t.id} className="flex items-center gap-3 py-3">
-            {t.is_done ? (
+            {t.from_devis ? (
+              <Dot className="w-5 h-5 text-[#1D5FE1] shrink-0" />
+            ) : t.is_done ? (
               <CheckCircle2 className="w-5 h-5 text-[#10B981] shrink-0" />
             ) : (
               <Circle className="w-5 h-5 text-gray-300 shrink-0" />
             )}
             <span
-              className={`text-sm ${t.is_done ? 'text-gray-400 line-through' : 'text-gray-900'}`}
+              className={`text-sm flex-1 ${
+                !t.from_devis && t.is_done ? 'text-gray-400 line-through' : 'text-gray-900'
+              }`}
             >
               {t.label}
             </span>
+            {t.room_name && (
+              <span className="text-xs text-gray-400 shrink-0">{t.room_name}</span>
+            )}
           </div>
         ))}
         {group.tasks.length === 0 && (

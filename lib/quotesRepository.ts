@@ -165,8 +165,12 @@ export async function fetchClientQuotesByEmail(email: string): Promise<QuoteReco
 export interface ChantierTask {
   id: string;
   label: string;
+  /** Manual checklist tasks carry a done flag; devis tasks never do. */
   is_done: boolean;
-  created_at: string;
+  /** Room name when the task comes from the devis (quote_rooms.name). */
+  room_name?: string;
+  /** true when the task comes from the devis (quote_tasks), false if manual. */
+  from_devis: boolean;
 }
 
 /** One chantier's works, with a completion ratio for the progress bar. */
@@ -181,13 +185,16 @@ export interface ChantierProgress {
 }
 
 /**
- * The works (chantier_tasks) for every chantier addressed to this client,
- * grouped per chantier with a completion percentage — so the client can follow
- * progress ("X% réalisé"). Read-only; only the entreprise edits tasks.
+ * The works for every chantier addressed to this client, grouped per chantier.
+ *
+ * Mirrors koji-main's "À faire" model (chantierAFaireTasksProvider): the tasks
+ * are the DEVIS tasks (quotes -> quote_rooms -> quote_tasks), with the manual
+ * chantier_tasks checklist merged in and de-duplicated by label. Devis tasks
+ * have no is_done in koji-main, so the completion % is computed only from the
+ * manual chantier_tasks that are marked done.
  *
  * Matched by email exactly like the devis (chantiers.client_email). Requires the
- * client RLS policies (koji-main/supabase/client_access.sql); without them this
- * returns an empty list rather than throwing.
+ * client RLS policies; without them this returns an empty list.
  */
 export async function fetchClientTasksByEmail(email: string): Promise<ChantierProgress[]> {
   const clientEmail = (email || '').trim().toLowerCase();
@@ -202,36 +209,87 @@ export async function fetchClientTasksByEmail(email: string): Promise<ChantierPr
   const rows = (chantiers as Array<{ id: string; reference: string | null }> | null) ?? [];
   if (rows.length === 0) return [];
 
-  const refById = new Map(rows.map((c) => [c.id, c.reference || 'Chantier']));
-
-  const { data: tasks, error: taskError } = await supabase
-    .from('chantier_tasks')
-    .select('id, chantier_id, label, is_done, created_at')
-    .in('chantier_id', rows.map((c) => c.id))
-    .order('created_at', { ascending: true });
-  if (taskError) throw taskError;
-
-  const grouped = new Map<string, ChantierTask[]>();
-  for (const t of (tasks as Array<ChantierTask & { chantier_id: string }> | null) ?? []) {
-    const list = grouped.get(t.chantier_id) ?? [];
-    list.push({ id: t.id, label: t.label, is_done: t.is_done, created_at: t.created_at });
-    grouped.set(t.chantier_id, list);
-  }
-
   const result: ChantierProgress[] = [];
-  for (const [chantierId, list] of grouped) {
-    const total = list.length;
-    const done = list.filter((t) => t.is_done).length;
+  for (const c of rows) {
+    const tasks = await tasksForChantier(c.id);
+    const manual = tasks.filter((t) => !t.from_devis);
+    // koji-main shows a checkbox/progress only on the manual checklist; devis
+    // tasks have no completion state. Base the % on the manual tasks; if there
+    // are none, fall back to "0 of N devis tasks" so the card still renders.
+    const total = manual.length > 0 ? manual.length : tasks.length;
+    const done = manual.filter((t) => t.is_done).length;
     result.push({
-      chantierId,
-      reference: refById.get(chantierId) ?? 'Chantier',
-      tasks: list,
+      chantierId: c.id,
+      reference: c.reference || 'Chantier',
+      tasks,
       done,
       total,
       progress: total === 0 ? 0 : done / total,
     });
   }
   return result;
+}
+
+/**
+ * Devis tasks (quote_rooms -> quote_tasks) for a chantier, plus the manual
+ * chantier_tasks, merged and de-duped by label — the same merge koji-main's
+ * chantierAFaireTasksProvider performs.
+ */
+async function tasksForChantier(chantierId: string): Promise<ChantierTask[]> {
+  // Devis tasks: take the newest quote on this chantier that actually has tasks.
+  const { data: quotes } = await supabase
+    .from('quotes')
+    .select('id, created_at')
+    .eq('chantier_id', chantierId)
+    .order('created_at', { ascending: false });
+
+  const devisTasks: ChantierTask[] = [];
+  for (const q of (quotes as Array<{ id: string }> | null) ?? []) {
+    const { data: roomsData } = await supabase
+      .from('quote_rooms')
+      .select('id, name, room_order, quote_tasks(id, label, created_at)')
+      .eq('quote_id', q.id)
+      .order('room_order', { ascending: true });
+
+    const rooms =
+      (roomsData as Array<{
+        id: string;
+        name: string | null;
+        quote_tasks: Array<{ id: string; label: string | null }> | null;
+      }> | null) ?? [];
+
+    for (const room of rooms) {
+      for (const t of room.quote_tasks ?? []) {
+        devisTasks.push({
+          id: t.id,
+          label: t.label || 'Tâche',
+          is_done: false,
+          room_name: room.name || undefined,
+          from_devis: true,
+        });
+      }
+    }
+    // First (newest) quote that has tasks wins — same rule as koji-main.
+    if (devisTasks.length > 0) break;
+  }
+
+  // Manual chantier_tasks checklist.
+  const { data: manualData } = await supabase
+    .from('chantier_tasks')
+    .select('id, label, is_done, created_at')
+    .eq('chantier_id', chantierId)
+    .order('created_at', { ascending: true });
+
+  const seen = new Set(devisTasks.map((t) => t.label.trim().toLowerCase()));
+  const merged: ChantierTask[] = [...devisTasks];
+  for (const t of (manualData as Array<{ id: string; label: string | null; is_done: boolean }> | null) ?? []) {
+    const label = (t.label || '').trim();
+    const key = label.toLowerCase();
+    if (!label || seen.has(key)) continue;
+    seen.add(key);
+    merged.push({ id: t.id, label, is_done: t.is_done, from_devis: false });
+  }
+  return merged;
 }
 
 export async function fetchQuoteById(quoteId: string): Promise<QuoteRecord | null> {
