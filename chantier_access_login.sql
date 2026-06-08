@@ -89,3 +89,96 @@ $$;
 -- app writes them right after insert (guarded by access_code IS NULL above).
 GRANT EXECUTE ON FUNCTION login_with_access_code(text, text) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION set_quote_access_credentials(uuid, text, text) TO anon, authenticated;
+
+-- ============================================================================
+-- 5) Open the devis by id alone (code-login is the authorization)
+-- ----------------------------------------------------------------------------
+-- The previous get_quote_for_client / submit_quote_signature REQUIRED a
+-- matching client email whenever the quote had one on file. Under the new
+-- per-chantier model the visitor already proved access via the Identifiant +
+-- Mot de passe (login_with_access_code), and the quote id is an unguessable
+-- UUID. So we relax both RPCs: the id alone authorizes; p_email is ignored.
+-- (Re-running this REPLACES the earlier definitions from update_rpc_functions.sql.)
+-- ============================================================================
+
+DROP FUNCTION IF EXISTS get_quote_for_client(uuid, text);
+CREATE OR REPLACE FUNCTION get_quote_for_client(p_quote_id uuid, p_email text)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_quote json;
+  v_rooms json;
+BEGIN
+  -- Authorization is the unguessable quote id (the client reached it only after
+  -- the Identifiant + Mot de passe gate). p_email is accepted for backward
+  -- compatibility but is NOT required.
+  IF NOT EXISTS (SELECT 1 FROM quotes WHERE id = p_quote_id) THEN
+    RETURN NULL;
+  END IF;
+
+  SELECT COALESCE(json_agg(
+    json_build_object(
+      'id', r.id,
+      'name', r.name,
+      'quote_tasks', (
+        SELECT COALESCE(json_agg(t), '[]'::json)
+        FROM quote_tasks t
+        WHERE t.room_id = r.id
+      )
+    )
+  ), '[]'::json)
+  INTO v_rooms
+  FROM quote_rooms r
+  WHERE r.quote_id = p_quote_id;
+
+  SELECT json_build_object(
+    'id', q.id,
+    'status', q.status,
+    'created_at', q.created_at,
+    'metadata', q.metadata,
+    'total_ht', q.total_ht,
+    'total_ttc', q.total_ttc,
+    'tva_rate', q.tva_rate,
+    'total', q.total_ttc,
+    'client_name', q.metadata->'client'->>'name',
+    'client_email', q.metadata->'client'->>'email',
+    'signature_data', q.signature_data,
+    'signed_at', q.signed_at,
+    'quote_rooms', v_rooms
+  )
+  INTO v_quote
+  FROM quotes q
+  WHERE q.id = p_quote_id;
+
+  RETURN v_quote;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION submit_quote_signature(
+  p_quote_id uuid,
+  p_email text,
+  p_signature_data text
+)
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_rows_updated integer;
+BEGIN
+  -- Same relaxed rule: the unguessable id alone authorizes the signature.
+  UPDATE quotes
+  SET signature_data = p_signature_data,
+      signed_at = NOW(),
+      status = 'accepte'
+  WHERE id = p_quote_id;
+
+  GET DIAGNOSTICS v_rows_updated = ROW_COUNT;
+  RETURN v_rows_updated > 0;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION get_quote_for_client(uuid, text) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION submit_quote_signature(uuid, text, text) TO anon, authenticated;

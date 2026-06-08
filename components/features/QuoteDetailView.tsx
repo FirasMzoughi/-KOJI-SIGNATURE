@@ -217,7 +217,13 @@ export function QuoteDetailView({ id, email }: QuoteDetailViewProps) {
       setIsSending(false);
     }
   };
-  if (isLoading || !authReady) {
+  // While loading, or before the id-only access attempt has resolved (and no
+  // account session is taking over), keep showing the loader instead of
+  // flashing the login gate. This is the per-chantier code-login path: the
+  // visitor arrived from the Identifiant + Mot de passe screen, so the devis
+  // must open by id without ever asking for an email.
+  const idOnlyPending = !authUser?.email && id != null && !idOnlyTried;
+  if (isLoading || !authReady || idOnlyPending) {
     return <div className="p-8 flex justify-center items-center h-screen text-primary">Chargement du devis...</div>;
   }
 
