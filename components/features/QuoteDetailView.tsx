@@ -147,6 +147,18 @@ export function QuoteDetailView({ id, email }: QuoteDetailViewProps) {
     fetchQuote(id, authedEmail);
   }, [authUser?.email, id, autoTriedEmail, fetchQuote]);
 
+  // Per-chantier code login: the visitor arrived at /?quoteId=<id> after passing
+  // the Identifiant + Mot de passe gate (login_with_access_code). That secret IS
+  // the authorization, so we open the devis by id alone — no Supabase session.
+  // The RPC authorizes by the unguessable UUID when no email is supplied.
+  const [idOnlyTried, setIdOnlyTried] = useState(false);
+  useEffect(() => {
+    if (!id || idOnlyTried) return;
+    if (authUser?.email) return; // account-session path handles it instead
+    setIdOnlyTried(true);
+    fetchQuote(id);
+  }, [id, idOnlyTried, authUser?.email, fetchQuote]);
+
   const handleSign = async (signatureData: string) => {
     if (!quote) return;
     await updateQuoteStatus(quote.id, 'Accepted', signatureData);
@@ -209,13 +221,18 @@ export function QuoteDetailView({ id, email }: QuoteDetailViewProps) {
     return <div className="p-8 flex justify-center items-center h-screen text-primary">Chargement du devis...</div>;
   }
 
-  // The devis opens only when the LOGGED-IN account's email matches the
-  // chantier's client_email. requiredEmail is the address the entreprise set on
-  // the chantier; verifiedEmail is the authenticated account's email.
+  // The devis opens when EITHER:
+  //   • it loaded successfully by id alone (the visitor passed the per-chantier
+  //     Identifiant + Mot de passe gate, which is the authorization), OR
+  //   • a logged-in account's email matches the chantier's client_email.
+  // requiredEmail is the address the entreprise set on the chantier.
   const requiredEmail = (quote?.clientEmail ?? '').trim().toLowerCase();
   const verifiedOk =
     requiredEmail === '' ||
     (verifiedEmail ?? '').trim().toLowerCase() === requiredEmail;
+  // A quote present in the store + no error means the (id-authorized) fetch
+  // succeeded — open it without requiring a Supabase session.
+  const loadedById = quote != null && !error;
 
   const isLoggedIn = Boolean(authUser?.email);
   // Logged in, but this account's email is not the one on the chantier.
@@ -223,9 +240,9 @@ export function QuoteDetailView({ id, email }: QuoteDetailViewProps) {
   // Logged in with the right account but the RPC still denied (rare / RPC race).
   const accessError = isLoggedIn && Boolean(error);
 
-  // Gate: not logged in, devis not yet loaded, or wrong account. The visitor
-  // must sign in with the SAME Koji account whose email matches the chantier.
-  if (!isLoggedIn || error || !quote || !verifiedOk) {
+  // Open the devis if it loaded by id (code-login path) OR via a matching
+  // account session. Only fall through to the login gate when neither holds.
+  if (!loadedById && (!isLoggedIn || error || !quote || !verifiedOk)) {
     return (
       <div className="min-h-[70vh] flex items-center justify-center bg-background p-4">
         <Card className="w-full max-w-md p-8 border-none shadow-sm bg-white space-y-5">

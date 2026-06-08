@@ -2,12 +2,11 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
+  const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,13 +18,27 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      // Verify the per-chantier Identifiant + Mot de passe. The RPC returns the
+      // matching quote id (or null). On success we open that devis directly —
+      // the unguessable id authorizes viewing + signing (no account needed).
+      const { data, error } = await supabase.rpc('login_with_access_code', {
+        p_code: code.trim(),
+        p_password: password,
+      });
+
       if (error) throw error;
 
-      router.push('/client');
-      router.refresh();
-    } catch (err: any) {
-      setError(err.message || 'Une erreur est survenue');
+      const quoteId = typeof data === 'string' ? data : data?.toString();
+      if (!quoteId || quoteId === 'null') {
+        setError('Identifiant ou mot de passe incorrect.');
+        return;
+      }
+
+      router.push(`/?quoteId=${quoteId}`);
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : 'Une erreur est survenue';
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -39,7 +52,9 @@ export default function LoginPage() {
             <img src="/koji-mark.svg" alt="Koji" className="w-full h-full object-contain p-2.5" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">Connexion</h1>
-          <p className="text-sm text-gray-500">Entrez vos identifiants pour accéder à vos devis</p>
+          <p className="text-sm text-gray-500">
+            Entrez l’identifiant et le mot de passe reçus par message pour accéder à votre devis
+          </p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-6">
@@ -51,19 +66,20 @@ export default function LoginPage() {
 
           <div className="space-y-4">
             <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                Adresse email
+              <label htmlFor="code" className="block text-sm font-medium text-gray-700 mb-1">
+                Identifiant
               </label>
               <input
-                id="email"
-                name="email"
-                type="email"
-                autoComplete="email"
+                id="code"
+                name="code"
+                type="text"
+                autoComplete="off"
+                autoCapitalize="characters"
                 required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 bg-[#F0F4FF] border border-transparent rounded-xl focus:bg-white focus:ring-2 focus:ring-[#1D5FE1]/30 focus:border-[#1D5FE1] transition-all outline-none text-gray-900 font-medium"
-                placeholder="vous@exemple.com"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                className="w-full px-4 py-3 bg-[#F0F4FF] border border-transparent rounded-xl focus:bg-white focus:ring-2 focus:ring-[#1D5FE1]/30 focus:border-[#1D5FE1] transition-all outline-none text-gray-900 font-medium tracking-wide"
+                placeholder="KOJI-XXXXXX"
               />
             </div>
 
@@ -75,7 +91,7 @@ export default function LoginPage() {
                 id="password"
                 name="password"
                 type="password"
-                autoComplete="current-password"
+                autoComplete="off"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -90,15 +106,8 @@ export default function LoginPage() {
             disabled={loading}
             className="w-full flex items-center justify-center px-4 py-3.5 bg-[#1D5FE1] hover:bg-blue-700 text-white rounded-xl font-bold transition-all shadow-lg shadow-[#1D5FE1]/30 disabled:opacity-70 disabled:cursor-not-allowed"
           >
-            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Se connecter'}
+            {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Accéder à mon devis'}
           </button>
-
-          <div className="text-center text-sm text-gray-500">
-            Pas encore de compte ?{' '}
-            <Link href="/auth/signup" className="text-[#1D5FE1] hover:text-blue-800 font-bold transition-colors">
-              S&apos;inscrire
-            </Link>
-          </div>
         </form>
       </div>
     </div>
