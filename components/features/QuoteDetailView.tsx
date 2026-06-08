@@ -1,7 +1,7 @@
 'use client';
 
 import { useClientStore } from '@/store/clientStore';
-import { supabase } from '@/lib/supabaseClient';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { Card } from '@/components/ui/Card';
@@ -80,12 +80,10 @@ function lineBreakdown(item: QuoteLineItem): string[] {
 // `email` (the address baked into the link by koji-main) is used only to
 // pre-fill the login field — the devis still opens strictly on the logged-in
 // account's email, never on the URL value.
-export function QuoteDetailView({ id, email }: QuoteDetailViewProps) {
-  const { quotes, updateQuoteStatus, updateQuoteStartDate, addQuoteMessage, fetchQuote, isLoading, error, logout } = useClientStore();
-  // The logged-in account (the SAME account as the dashboard). The devis opens
-  // only when this account's email matches the chantier's client_email.
-  const authUser = useClientStore((s) => s.user);
+export function QuoteDetailView({ id }: QuoteDetailViewProps) {
+  const { quotes, updateQuoteStatus, updateQuoteStartDate, addQuoteMessage, fetchQuote, isLoading, error } = useClientStore();
   const authReady = useClientStore((s) => s.authReady);
+  const router = useRouter();
 
   const quote = quotes.find((q) => q.id === id);
 
@@ -96,68 +94,18 @@ export function QuoteDetailView({ id, email }: QuoteDetailViewProps) {
   const [isSignModalOpen, setIsSignModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // The account email that successfully unlocked the devis. Used as a
-  // client-side backstop so the devis stays hidden until the logged-in
-  // account's address matches the one on the chantier.
-  const [verifiedEmail, setVerifiedEmail] = useState<string | null>(null);
-
-  // ── Account login gate (SAME account as the dashboard) ──────────────────────
-  // The devis link no longer has its own separate "type any email / Google"
-  // gate. To open a devis you sign in with your Koji account (email + password);
-  // the devis then opens only if that account's email matches the chantier's
-  // client_email. One account, one login, everywhere.
-  const [loginEmail, setLoginEmail] = useState(email ?? '');
-  const [loginPassword, setLoginPassword] = useState('');
-  const [loginLoading, setLoginLoading] = useState(false);
-  const [loginError, setLoginError] = useState<string | null>(null);
-
-  const handleAccountLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const mail = loginEmail.trim();
-    if (!mail || !loginPassword) return;
-    setLoginLoading(true);
-    setLoginError(null);
-    try {
-      const { error: signInError } = await supabase.auth.signInWithPassword({
-        email: mail,
-        password: loginPassword,
-      });
-      if (signInError) throw signInError;
-      // On success the auth state updates; the effect below auto-opens the devis
-      // using the now-authenticated session email.
-    } catch (err: unknown) {
-      setLoginError(
-        err instanceof Error ? err.message : 'Identifiants incorrects.'
-      );
-    } finally {
-      setLoginLoading(false);
-    }
-  };
-
-  // Once an account session exists, open the devis with that account's email.
-  // The RPC authorizes by id + email, so a devis tied to a chantier only opens
-  // for the matching account. Runs once per identity.
-  const [autoTriedEmail, setAutoTriedEmail] = useState<string | null>(null);
-  useEffect(() => {
-    const authedEmail = authUser?.email?.trim();
-    if (!authedEmail || !id) return;
-    if (autoTriedEmail === authedEmail) return; // already tried this identity
-    setAutoTriedEmail(authedEmail);
-    setVerifiedEmail(authedEmail);
-    fetchQuote(id, authedEmail);
-  }, [authUser?.email, id, autoTriedEmail, fetchQuote]);
-
-  // Per-chantier code login: the visitor arrived at /?quoteId=<id> after passing
-  // the Identifiant + Mot de passe gate (login_with_access_code). That secret IS
-  // the authorization, so we open the devis by id alone — no Supabase session.
-  // The RPC authorizes by the unguessable UUID when no email is supplied.
+  // A /?quoteId=<id> visit is ALWAYS authorized by the unguessable quote id —
+  // the visitor reached it from the link / Identifiant + Mot de passe gate, not
+  // as a dashboard account. So we open the devis by id alone and IGNORE any
+  // stale Supabase session that may be left over in the browser (which would
+  // otherwise wrongly trigger the "ce devis n'est pas accessible avec ce
+  // compte" email gate). Runs once per id.
   const [idOnlyTried, setIdOnlyTried] = useState(false);
   useEffect(() => {
     if (!id || idOnlyTried) return;
-    if (authUser?.email) return; // account-session path handles it instead
     setIdOnlyTried(true);
-    fetchQuote(id);
-  }, [id, idOnlyTried, authUser?.email, fetchQuote]);
+    fetchQuote(id); // id-only: no email match required
+  }, [id, idOnlyTried, fetchQuote]);
 
   const handleSign = async (signatureData: string) => {
     if (!quote) return;
@@ -217,38 +165,26 @@ export function QuoteDetailView({ id, email }: QuoteDetailViewProps) {
       setIsSending(false);
     }
   };
-  // While loading, or before the id-only access attempt has resolved (and no
-  // account session is taking over), keep showing the loader instead of
-  // flashing the login gate. This is the per-chantier code-login path: the
-  // visitor arrived from the Identifiant + Mot de passe screen, so the devis
-  // must open by id without ever asking for an email.
-  const idOnlyPending = !authUser?.email && id != null && !idOnlyTried;
+  // Keep the loader until the id-only access attempt has actually resolved, so
+  // the login gate never flashes for a /?quoteId= visitor. (The id fetch always
+  // runs for a quote link — see the effect above.)
+  const idOnlyPending = id != null && (!idOnlyTried || isLoading);
   if (isLoading || !authReady || idOnlyPending) {
     return <div className="p-8 flex justify-center items-center h-screen text-primary">Chargement du devis...</div>;
   }
 
-  // The devis opens when EITHER:
-  //   • it loaded successfully by id alone (the visitor passed the per-chantier
-  //     Identifiant + Mot de passe gate, which is the authorization), OR
-  //   • a logged-in account's email matches the chantier's client_email.
-  // requiredEmail is the address the entreprise set on the chantier.
-  const requiredEmail = (quote?.clientEmail ?? '').trim().toLowerCase();
-  const verifiedOk =
-    requiredEmail === '' ||
-    (verifiedEmail ?? '').trim().toLowerCase() === requiredEmail;
   // A quote present in the store + no error means the (id-authorized) fetch
-  // succeeded — open it without requiring a Supabase session.
+  // succeeded — open it. No email match required: the unguessable id + the
+  // Identifiant/Mot de passe the visitor already entered ARE the authorization.
   const loadedById = quote != null && !error;
 
-  const isLoggedIn = Boolean(authUser?.email);
-  // Logged in, but this account's email is not the one on the chantier.
-  const wrongAccount = isLoggedIn && quote != null && !verifiedOk;
-  // Logged in with the right account but the RPC still denied (rare / RPC race).
-  const accessError = isLoggedIn && Boolean(error);
-
-  // Open the devis if it loaded by id (code-login path) OR via a matching
-  // account session. Only fall through to the login gate when neither holds.
-  if (!loadedById && (!isLoggedIn || error || !quote || !verifiedOk)) {
+  // Only fall through to the login gate when the devis genuinely could not be
+  // loaded by id (bad/expired link or missing RPC). A stale account session is
+  // irrelevant here — we never block a valid quote link on it.
+  if (!loadedById) {
+    // The devis could not be opened from this link (bad/expired id, or the
+    // backend RPC isn't updated yet). Point the visitor at the per-chantier
+    // Identifiant + Mot de passe login rather than an email form.
     return (
       <div className="min-h-[70vh] flex items-center justify-center bg-background p-4">
         <Card className="w-full max-w-md p-8 border-none shadow-sm bg-white space-y-5">
@@ -257,83 +193,20 @@ export function QuoteDetailView({ id, email }: QuoteDetailViewProps) {
               <img src="/koji-mark.svg" alt="Koji" className="w-full h-full object-contain p-2.5" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">Connexion à votre espace</h1>
+              <h1 className="text-xl font-bold text-gray-900">Devis introuvable</h1>
               <p className="text-sm text-muted-foreground mt-1">
-                Connectez-vous avec votre compte Koji pour consulter et signer ce devis.
+                Ce lien ne permet pas d&apos;ouvrir le devis. Connectez-vous avec
+                l&apos;identifiant et le mot de passe reçus par message.
               </p>
             </div>
           </div>
-
-          {wrongAccount ? (
-            // Logged in with an account that doesn't match the chantier email.
-            <div className="space-y-4 text-center">
-              <div className="p-3 text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded-lg">
-                Ce devis n&apos;est pas adressé au compte <strong>{authUser?.email}</strong>.
-                {requiredEmail && (
-                  <> Il a été envoyé à une autre adresse e-mail par l&apos;entreprise.</>
-                )}
-              </div>
-              <Button
-                type="button"
-                onClick={async () => {
-                  await logout();
-                  setAutoTriedEmail(null);
-                  setVerifiedEmail(null);
-                  setLoginEmail(email ?? '');
-                  setLoginPassword('');
-                }}
-                className="w-full h-12 bg-primary hover:bg-primary/90"
-              >
-                Changer de compte
-              </Button>
-            </div>
-          ) : (
-            // Standard account login (email + password) — the SAME as /auth/login.
-            <form onSubmit={handleAccountLogin} className="space-y-4">
-              {(loginError || accessError) && (
-                <div className="p-3 text-sm text-red-500 bg-red-50 border border-red-100 rounded-lg">
-                  {loginError || "Ce devis n'est pas accessible avec ce compte."}
-                </div>
-              )}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Adresse e-mail</label>
-                <input
-                  type="email"
-                  required
-                  autoFocus={!email}
-                  placeholder="vous@exemple.com"
-                  value={loginEmail}
-                  onChange={(e) => setLoginEmail(e.target.value)}
-                  className="w-full h-12 rounded-xl border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 transition-all"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Mot de passe</label>
-                <input
-                  type="password"
-                  required
-                  autoFocus={Boolean(email)}
-                  placeholder="••••••••"
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
-                  className="w-full h-12 rounded-xl border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 transition-all"
-                />
-              </div>
-              <Button
-                type="submit"
-                disabled={loginLoading}
-                className="w-full h-12 bg-primary hover:bg-primary/90 disabled:opacity-70"
-              >
-                {loginLoading ? 'Connexion…' : 'Se connecter et ouvrir le devis'}
-              </Button>
-              <p className="text-center text-sm text-muted-foreground">
-                Pas encore de compte ?{' '}
-                <a href="/auth/signup" className="text-primary font-semibold hover:underline">
-                  Créer un compte
-                </a>
-              </p>
-            </form>
-          )}
+          <Button
+            type="button"
+            onClick={() => router.push('/auth/login')}
+            className="w-full h-12 bg-primary hover:bg-primary/90"
+          >
+            Se connecter avec mon identifiant
+          </Button>
         </Card>
       </div>
     );
@@ -431,26 +304,6 @@ export function QuoteDetailView({ id, email }: QuoteDetailViewProps) {
   return (
     <div className="min-h-screen bg-background p-4 md:p-8 font-sans">
       <div className="max-w-6xl mx-auto space-y-6">
-
-        {/* Account bar — same account as the dashboard, with a link back to it. */}
-        {authUser?.email && (
-          <div className="flex items-center justify-between gap-3 rounded-xl bg-white border border-gray-100 px-4 py-2.5 shadow-sm">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="h-7 w-7 shrink-0 rounded-full bg-[#1D5FE1] text-white text-[11px] font-bold flex items-center justify-center">
-                {(authUser.name || authUser.email).charAt(0).toUpperCase()}
-              </span>
-              <span className="text-xs text-muted-foreground truncate">
-                Connecté en tant que <strong className="text-gray-900">{authUser.email}</strong>
-              </span>
-            </div>
-            <a
-              href="/client"
-              className="shrink-0 inline-flex items-center gap-1.5 text-xs font-semibold text-[#1D5FE1] hover:underline"
-            >
-              <FileText className="h-3.5 w-3.5" /> Voir tous mes devis
-            </a>
-          </div>
-        )}
 
         {/* --- Top Header Card (Mobile Style) --- */}
         <Card className="p-6 border-none shadow-sm bg-white overflow-hidden relative">
