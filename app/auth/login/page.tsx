@@ -34,6 +34,16 @@ export default function LoginPage() {
         return;
       }
 
+      // Mark this quote as unlocked for THIS browser session only. The devis
+      // view requires this flag, so simply sharing the link does not grant
+      // access — the recipient must log in with the Identifiant + Mot de passe.
+      // sessionStorage is per-tab and never travels in the URL.
+      try {
+        sessionStorage.setItem(`koji_access_${quoteId}`, '1');
+      } catch {
+        /* sessionStorage unavailable (private mode edge) — view will re-ask */
+      }
+
       router.push(`/?quoteId=${quoteId}`);
     } catch (err: unknown) {
       const message =

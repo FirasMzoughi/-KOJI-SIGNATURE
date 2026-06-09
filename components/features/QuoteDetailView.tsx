@@ -94,18 +94,29 @@ export function QuoteDetailView({ id }: QuoteDetailViewProps) {
   const [isSignModalOpen, setIsSignModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // A /?quoteId=<id> visit is ALWAYS authorized by the unguessable quote id —
-  // the visitor reached it from the link / Identifiant + Mot de passe gate, not
-  // as a dashboard account. So we open the devis by id alone and IGNORE any
-  // stale Supabase session that may be left over in the browser (which would
-  // otherwise wrongly trigger the "ce devis n'est pas accessible avec ce
-  // compte" email gate). Runs once per id.
-  const [idOnlyTried, setIdOnlyTried] = useState(false);
+  // The devis opens ONLY after a successful Identifiant + Mot de passe login,
+  // which sets a per-session flag for this quote id. Opening the link without
+  // logging in (e.g. someone the client forwarded it to) finds no flag and is
+  // sent to /auth/login. So the login screen always gates access — sharing the
+  // raw link grants nothing.
+  const [accessChecked, setAccessChecked] = useState(false);
+  const [hasAccess, setHasAccess] = useState(false);
   useEffect(() => {
-    if (!id || idOnlyTried) return;
-    setIdOnlyTried(true);
-    fetchQuote(id); // id-only: no email match required
-  }, [id, idOnlyTried, fetchQuote]);
+    if (!id || accessChecked) return;
+    let unlocked = false;
+    try {
+      unlocked = sessionStorage.getItem(`koji_access_${id}`) === '1';
+    } catch {
+      unlocked = false;
+    }
+    setHasAccess(unlocked);
+    setAccessChecked(true);
+    if (unlocked) {
+      fetchQuote(id); // id alone authorizes the data once login is proven
+    } else {
+      router.replace(`/auth/login`);
+    }
+  }, [id, accessChecked, fetchQuote, router]);
 
   const handleSign = async (signatureData: string) => {
     if (!quote) return;
@@ -165,22 +176,20 @@ export function QuoteDetailView({ id }: QuoteDetailViewProps) {
       setIsSending(false);
     }
   };
-  // Keep the loader until the id-only access attempt has actually resolved, so
-  // the login gate never flashes for a /?quoteId= visitor. (The id fetch always
-  // runs for a quote link — see the effect above.)
-  const idOnlyPending = id != null && (!idOnlyTried || isLoading);
-  if (isLoading || !authReady || idOnlyPending) {
+  // Until we've checked the per-session login flag — or while redirecting an
+  // unauthenticated visitor to /auth/login, or while the quote loads — show the
+  // loader. This prevents the devis (or the error card) from flashing before
+  // the login screen takes over.
+  if (!accessChecked || !hasAccess || isLoading || !authReady) {
     return <div className="p-8 flex justify-center items-center h-screen text-primary">Chargement du devis...</div>;
   }
 
-  // A quote present in the store + no error means the (id-authorized) fetch
-  // succeeded — open it. No email match required: the unguessable id + the
-  // Identifiant/Mot de passe the visitor already entered ARE the authorization.
+  // A quote present in the store + no error means the (login-gated, id-authorized)
+  // fetch succeeded — open it.
   const loadedById = quote != null && !error;
 
-  // Only fall through to the login gate when the devis genuinely could not be
-  // loaded by id (bad/expired link or missing RPC). A stale account session is
-  // irrelevant here — we never block a valid quote link on it.
+  // Access was granted (logged in) but the devis still could not be loaded
+  // (bad/expired id, or the backend RPC isn't updated yet).
   if (!loadedById) {
     // The devis could not be opened from this link (bad/expired id, or the
     // backend RPC isn't updated yet). Point the visitor at the per-chantier
