@@ -8,10 +8,10 @@ import { Card } from '@/components/ui/Card';
 import { SignatureModal } from '@/components/features/SignatureModal';
 import { useState, useEffect, useRef } from 'react';
 import { formatDate, formatCurrency } from '@/lib/utils';
-import { Download, CheckCircle, Printer, FileText, Share2, Eye, Clock, Paperclip, X, File as FileIcon, Send, MapPin } from 'lucide-react';
+import { Download, CheckCircle, Printer, FileText, Share2, Eye, Clock, Paperclip, X, File as FileIcon, Send, MapPin, ClipboardList, Circle } from 'lucide-react';
 import Image from 'next/image';
 import { Textarea } from '@/components/ui/Textarea';
-import type { QuoteLineItem } from '@/types';
+import type { Quote, QuoteLineItem } from '@/types';
 
 interface QuoteDetailViewProps {
   id: string;
@@ -93,6 +93,9 @@ export function QuoteDetailView({ id }: QuoteDetailViewProps) {
   const [isSending, setIsSending] = useState(false);
   const [isSignModalOpen, setIsSignModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // The chantier space has three sections; "devis" is the default.
+  const [activeTab, setActiveTab] = useState<'devis' | 'suivi' | 'messages'>('devis');
 
   // The devis opens ONLY after a successful Identifiant + Mot de passe login,
   // which sets a per-session flag for this quote id. Opening the link without
@@ -343,7 +346,50 @@ export function QuoteDetailView({ id }: QuoteDetailViewProps) {
           </div>
         </Card>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* --- Tabs: Devis · Suivi des travaux · Messages --- */}
+        <div className="flex gap-1 rounded-xl bg-gray-100 p-1">
+          {([
+            ['devis', 'Devis'],
+            ['suivi', 'Suivi des travaux'],
+            ['messages', 'Messages'],
+          ] as const).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setActiveTab(key)}
+              className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors ${
+                activeTab === key
+                  ? 'bg-white text-primary shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* ===================== SUIVI DES TRAVAUX ===================== */}
+        {activeTab === 'suivi' && (
+          <SuiviSection quote={quote} />
+        )}
+
+        {/* ===================== MESSAGES ===================== */}
+        {activeTab === 'messages' && (
+          <MessagesSection
+            quote={quote}
+            newComment={newComment}
+            setNewComment={setNewComment}
+            pendingFiles={pendingFiles}
+            removeFile={removeFile}
+            fileInputRef={fileInputRef}
+            handleFileSelect={handleFileSelect}
+            handleSubmitComment={handleSubmitComment}
+            isSending={isSending}
+          />
+        )}
+
+        {/* ===================== DEVIS ===================== */}
+        <div className={`grid grid-cols-1 md:grid-cols-3 gap-6 ${activeTab === 'devis' ? '' : 'hidden'}`}>
 
           {/* --- LEFT COLUMN (Document) --- */}
           <div className="md:col-span-2 space-y-6">
@@ -522,102 +568,7 @@ export function QuoteDetailView({ id }: QuoteDetailViewProps) {
                 </div>
               </div>{/* /relative z-10 */}
             </Card>
-
-            {/* Comments Section */}
-            <Card className="p-6 border-none shadow-sm space-y-6">
-              <h3 className="font-bold text-lg text-primary">Discussion</h3>
-              <div className="space-y-6">
-                {quote.comments?.map((comment) => (
-                  <div key={comment.id} className="flex gap-4">
-                    <div className="h-8 w-8 rounded-full bg-accent/20 flex items-center justify-center text-xs font-bold text-accent shrink-0">
-                      {comment.author.charAt(0)}
-                    </div>
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-sm text-primary">{comment.author}</span>
-                        <span className="text-xs text-muted-foreground">{formatDate(comment.date)}</span>
-                      </div>
-                      <div className="bg-background p-3 rounded-lg text-sm text-primary/80">
-                        {comment.text}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              <div className="border-t border-border pt-4">
-                {/* Attachment Preview (Composer) */}
-                {pendingFiles.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mb-3 px-1">
-                    {pendingFiles.map((file, idx) => (
-                      <div key={idx} className="relative group bg-gray-50 border border-gray-200 rounded-lg p-2 flex items-center gap-2 pr-6">
-                        {file.type.startsWith('image/') ? (
-                          <div className="h-8 w-8 relative rounded overflow-hidden flex-shrink-0">
-                            <img src={URL.createObjectURL(file)} alt="preview" className="h-full w-full object-cover" />
-                          </div>
-                        ) : (
-                          <FileIcon className="h-5 w-5 text-gray-400" />
-                        )}
-                        <div className="flex flex-col">
-                          <span className="text-xs font-medium text-gray-700 truncate max-w-[100px]">{file.name}</span>
-                          <span className="text-[10px] text-gray-500">{(file.size / 1024).toFixed(0)} KB</span>
-                        </div>
-                        <button
-                          onClick={() => removeFile(idx)}
-                          className="absolute top-1 right-1 p-0.5 rounded-full bg-gray-200 hover:bg-gray-300 text-gray-600"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <div className="flex gap-3">
-                  <div className="relative flex-1">
-                    <Textarea
-                      placeholder="Écrire un message..."
-                      className="min-h-[80px] bg-background border-border focus:border-accent pr-10"
-                      value={newComment}
-                      onChange={(e) => setNewComment(e.target.value)}
-                      disabled={isSending}
-                    />
-
-                    {/* Attachment Button */}
-                    <input
-                      type="file"
-                      multiple
-                      ref={fileInputRef}
-                      className="hidden"
-                      onChange={handleFileSelect}
-                    />
-                    <button
-                      className="absolute bottom-2 right-2 p-2 rounded-full text-gray-400 hover:text-accent hover:bg-gray-100 transition-colors"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={isSending}
-                      title="Ajouter un fichier"
-                    >
-                      <Paperclip className="h-5 w-5" />
-                    </button>
-                  </div>
-
-                  <Button
-                    size="icon"
-                    className="h-[80px] w-[80px] shrink-0 bg-primary hover:bg-primary/90 disabled:opacity-50"
-                    onClick={handleSubmitComment}
-                    disabled={isSending || (!newComment.trim() && pendingFiles.length === 0)}
-                    title="Envoyer"
-                    aria-label="Envoyer"
-                  >
-                    {isSending ? (
-                      <div className="h-5 w-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    ) : (
-                      <Send className="h-5 w-5" />
-                    )}
-                  </Button>
-                </div>
-              </div>
-            </Card>
+            {/* Discussion moved to the "Messages" tab (see MessagesSection). */}
           </div>
 
           {/* --- RIGHT COLUMN (Actions & Info) --- */}
@@ -725,10 +676,189 @@ export function QuoteDetailView({ id }: QuoteDetailViewProps) {
       <style jsx global>{`
         @media (max-width: 768px) {
           .mobile-actions-order {
-            order: -1; 
+            order: -1;
           }
         }
       `}</style>
     </div>
+  );
+}
+
+// ── Suivi des travaux ────────────────────────────────────────────────────────
+// The works to follow for this chantier = the devis tasks (quote.items),
+// grouped by room. These are the prestations the artisan will carry out.
+function SuiviSection({ quote }: { quote: Quote }) {
+  const rooms = (quote.items ?? []).reduce<Record<string, QuoteLineItem[]>>(
+    (acc, item) => {
+      const room = item.room || 'Travaux';
+      (acc[room] = acc[room] || []).push(item);
+      return acc;
+    },
+    {}
+  );
+  const roomNames = Object.keys(rooms);
+  const total = quote.items?.length ?? 0;
+
+  return (
+    <div className="space-y-5">
+      <Card className="p-6 border-none shadow-sm bg-white">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-xl bg-[#F0F4FF] text-[#1D5FE1] flex items-center justify-center shrink-0">
+            <ClipboardList className="w-5 h-5" />
+          </div>
+          <div>
+            <h3 className="text-base font-bold text-gray-900">Suivi des travaux</h3>
+            <p className="text-xs text-gray-500">{total} prestation{total > 1 ? 's' : ''} prévue{total > 1 ? 's' : ''}</p>
+          </div>
+        </div>
+      </Card>
+
+      {roomNames.length === 0 ? (
+        <Card className="p-10 border-none shadow-sm bg-white text-center">
+          <ClipboardList className="w-10 h-10 text-gray-300 mx-auto" />
+          <p className="text-sm font-semibold text-gray-500 mt-3">Aucune tâche pour le moment</p>
+          <p className="text-xs text-gray-400 mt-1">Le suivi apparaîtra ici dès que votre artisan l&apos;aura démarré.</p>
+        </Card>
+      ) : (
+        roomNames.map((room) => (
+          <Card key={room} className="p-6 border-none shadow-sm bg-white">
+            <h4 className="text-sm font-bold text-primary mb-3">{room}</h4>
+            <div className="divide-y divide-gray-50">
+              {rooms[room].map((t) => (
+                <div key={t.id} className="flex items-center gap-3 py-3">
+                  <Circle className="w-5 h-5 text-[#1D5FE1] shrink-0" />
+                  <span className="text-sm flex-1 text-gray-900">{t.description}</span>
+                  {t.quantity ? (
+                    <span className="text-xs text-gray-400 shrink-0">
+                      {t.quantity}{t.unit ? ` ${t.unit}` : ''}
+                    </span>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </Card>
+        ))
+      )}
+    </div>
+  );
+}
+
+// ── Messages (Discussion) ────────────────────────────────────────────────────
+function MessagesSection({
+  quote,
+  newComment,
+  setNewComment,
+  pendingFiles,
+  removeFile,
+  fileInputRef,
+  handleFileSelect,
+  handleSubmitComment,
+  isSending,
+}: {
+  quote: Quote;
+  newComment: string;
+  setNewComment: (v: string) => void;
+  pendingFiles: File[];
+  removeFile: (i: number) => void;
+  fileInputRef: React.RefObject<HTMLInputElement | null>;
+  handleFileSelect: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  handleSubmitComment: () => void;
+  isSending: boolean;
+}) {
+  return (
+    <Card className="p-6 border-none shadow-sm space-y-6 bg-white">
+      <h3 className="font-bold text-lg text-primary">Discussion avec votre artisan</h3>
+      <div className="space-y-6">
+        {(quote.comments ?? []).length === 0 && (
+          <p className="text-sm text-muted-foreground">Aucun message pour le moment. Écrivez à votre artisan ci-dessous.</p>
+        )}
+        {quote.comments?.map((comment) => (
+          <div key={comment.id} className="flex gap-4">
+            <div className="h-8 w-8 rounded-full bg-accent/20 flex items-center justify-center text-xs font-bold text-accent shrink-0">
+              {comment.author.charAt(0)}
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-sm text-primary">{comment.author}</span>
+                <span className="text-xs text-muted-foreground">{formatDate(comment.date)}</span>
+              </div>
+              <div className="bg-background p-3 rounded-lg text-sm text-primary/80">
+                {comment.text}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="border-t border-border pt-4">
+        {pendingFiles.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-3 px-1">
+            {pendingFiles.map((file, idx) => (
+              <div key={idx} className="relative group bg-gray-50 border border-gray-200 rounded-lg p-2 flex items-center gap-2 pr-6">
+                {file.type.startsWith('image/') ? (
+                  <div className="h-8 w-8 relative rounded overflow-hidden flex-shrink-0">
+                    <img src={URL.createObjectURL(file)} alt="preview" className="h-full w-full object-cover" />
+                  </div>
+                ) : (
+                  <FileIcon className="h-5 w-5 text-gray-400" />
+                )}
+                <div className="flex flex-col">
+                  <span className="text-xs font-medium text-gray-700 truncate max-w-[100px]">{file.name}</span>
+                  <span className="text-[10px] text-gray-500">{(file.size / 1024).toFixed(0)} KB</span>
+                </div>
+                <button
+                  onClick={() => removeFile(idx)}
+                  className="absolute top-1 right-1 p-0.5 rounded-full bg-gray-200 hover:bg-gray-300 text-gray-600"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="flex gap-3">
+          <div className="relative flex-1">
+            <Textarea
+              placeholder="Écrire un message..."
+              className="min-h-[80px] bg-background border-border focus:border-accent pr-10"
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              disabled={isSending}
+            />
+            <input
+              type="file"
+              multiple
+              ref={fileInputRef}
+              className="hidden"
+              onChange={handleFileSelect}
+            />
+            <button
+              className="absolute bottom-2 right-2 p-2 rounded-full text-gray-400 hover:text-accent hover:bg-gray-100 transition-colors"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isSending}
+              title="Ajouter un fichier"
+            >
+              <Paperclip className="h-5 w-5" />
+            </button>
+          </div>
+
+          <Button
+            size="icon"
+            className="h-[80px] w-[80px] shrink-0 bg-primary hover:bg-primary/90 disabled:opacity-50"
+            onClick={handleSubmitComment}
+            disabled={isSending || (!newComment.trim() && pendingFiles.length === 0)}
+            title="Envoyer"
+            aria-label="Envoyer"
+          >
+            {isSending ? (
+              <div className="h-5 w-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+            ) : (
+              <Send className="h-5 w-5" />
+            )}
+          </Button>
+        </div>
+      </div>
+    </Card>
   );
 }
