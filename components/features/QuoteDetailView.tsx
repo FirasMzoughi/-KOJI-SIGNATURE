@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/Card';
 import { SignatureModal } from '@/components/features/SignatureModal';
 import { useState, useEffect, useRef } from 'react';
 import { formatDate, formatCurrency } from '@/lib/utils';
-import { Download, CheckCircle, Printer, FileText, Share2, Eye, Clock, Paperclip, X, File as FileIcon, Send, ClipboardList, Circle } from 'lucide-react';
+import { Download, CheckCircle, Printer, FileText, Share2, Clock, Paperclip, X, File as FileIcon, Send, ClipboardList, Circle } from 'lucide-react';
 import Image from 'next/image';
 import { Textarea } from '@/components/ui/Textarea';
 import type { Quote, QuoteLineItem } from '@/types';
@@ -96,6 +96,10 @@ export function QuoteDetailView({ id }: QuoteDetailViewProps) {
 
   // The chantier space has three sections; "devis" is the default.
   const [activeTab, setActiveTab] = useState<'devis' | 'suivi' | 'messages'>('devis');
+
+  // While generating the PDF we force the desktop table layout (html2canvas
+  // renders the responsive phone/grid variants poorly — rows came out empty).
+  const [pdfMode, setPdfMode] = useState(false);
 
   // The devis opens ONLY after a successful Identifiant + Mot de passe login,
   // which sets a per-session flag for this quote id. Opening the link without
@@ -231,6 +235,12 @@ export function QuoteDetailView({ id }: QuoteDetailViewProps) {
       return;
     }
 
+    // Force the desktop (table) layout for the capture — the responsive phone
+    // variant rendered as empty rows in html2canvas. Wait two frames so React
+    // has painted the pdf-mode layout before the snapshot.
+    setPdfMode(true);
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+
     try {
       // Dynamic import to avoid SSR issues
       // @ts-ignore
@@ -239,10 +249,18 @@ export function QuoteDetailView({ id }: QuoteDetailViewProps) {
 
       const opt: any = {
         margin: [10, 10],
-        filename: `Devis-${quote.id}.pdf`,
+        filename: `Devis-${quote.quoteNumber || quote.id}.pdf`,
         image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, logging: true },
-        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          logging: false,
+          // Capture at a fixed desktop width so the PDF looks the same from a
+          // phone as from a computer.
+          windowWidth: 900,
+        },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+        pagebreak: { mode: ['avoid-all', 'css', 'legacy'] },
       };
 
       // html2pdf is a function that returns a worker
@@ -251,6 +269,8 @@ export function QuoteDetailView({ id }: QuoteDetailViewProps) {
       console.error("PDF generation failed", error);
       alert(`Erreur PDF: ${error?.message || 'Inconnue'}. L'impression s'ouvre.`);
       window.print();
+    } finally {
+      setPdfMode(false);
     }
   };
 
@@ -325,13 +345,13 @@ export function QuoteDetailView({ id }: QuoteDetailViewProps) {
                 <Badge className="bg-primary/10 text-primary hover:bg-primary/20 border-none uppercase tracking-wider text-xs font-bold px-2 py-1">
                   {isAccepted ? 'Accepté' : isRejected ? 'Refusé' : 'En attente'}
                 </Badge>
-                <span className="text-xs font-bold text-accent tracking-wider uppercase">DEVIS #{quote.id.substring(0, 8)}</span>
+                <span className="text-xs font-bold text-accent tracking-wider uppercase">DEVIS N° {quote.quoteNumber || quote.id.substring(0, 8)}</span>
               </div>
               <h1 className="text-3xl md:text-4xl font-serif font-bold text-primary">
                 {isAccepted ? 'Devis Accepté' : isRejected ? 'Devis Refusé' : 'Devis prêt'}
               </h1>
               <p className="text-muted-foreground mt-1 text-sm">
-                Valable jusqu'au {formatDate(quote.validUntil)}
+                Validité : {quote.validUntil && quote.validUntil !== 'N/A' ? quote.validUntil : '30 jours'}
               </p>
             </div>
 
@@ -357,7 +377,7 @@ export function QuoteDetailView({ id }: QuoteDetailViewProps) {
               key={key}
               type="button"
               onClick={() => setActiveTab(key)}
-              className={`flex-1 rounded-lg px-4 py-2.5 text-sm font-semibold transition-colors ${
+              className={`flex-1 rounded-lg px-2 sm:px-4 py-2.5 text-xs sm:text-sm leading-tight font-semibold transition-colors ${
                 activeTab === key
                   ? 'bg-white text-primary shadow-sm'
                   : 'text-gray-500 hover:text-gray-700'
@@ -461,18 +481,20 @@ export function QuoteDetailView({ id }: QuoteDetailViewProps) {
                 {/* Section heading directly above the table */}
                 <h4 className="text-sm font-bold" style={{ color: NAVY }}>Description des travaux</h4>
 
-                {/* Single table header — full columns on ≥sm, simplified on phone */}
+                {/* Single table header — full columns on ≥sm (and in the PDF),
+                    simplified on phone. Flex (not grid): html2canvas renders
+                    grid rows empty in the downloaded PDF. */}
                 <div className="rounded-t-md overflow-hidden">
-                  {/* Desktop / tablet header */}
-                  <div className="hidden sm:grid grid-cols-12 px-3 py-2 text-[10px] font-bold text-white" style={{ backgroundColor: NAVY }}>
-                    <span className="col-span-6">DÉSIGNATION</span>
-                    <span className="col-span-1 text-center">QTÉ</span>
-                    <span className="col-span-1 text-center">UNITÉ</span>
-                    <span className="col-span-2 text-center">P.UNIT HT</span>
-                    <span className="col-span-2 text-right">TOTAL HT</span>
+                  {/* Desktop / tablet / PDF header */}
+                  <div className={`${pdfMode ? 'flex' : 'hidden sm:flex'} px-3 py-2 text-[10px] font-bold text-white`} style={{ backgroundColor: NAVY }}>
+                    <span className="w-1/2">DÉSIGNATION</span>
+                    <span className="w-[10%] text-center">QTÉ</span>
+                    <span className="w-[10%] text-center">UNITÉ</span>
+                    <span className="w-[15%] text-center">P.UNIT HT</span>
+                    <span className="w-[15%] text-right">TOTAL HT</span>
                   </div>
                   {/* Phone header */}
-                  <div className="flex sm:hidden justify-between px-3 py-2 text-[10px] font-bold text-white" style={{ backgroundColor: NAVY }}>
+                  <div className={`${pdfMode ? 'hidden' : 'flex sm:hidden'} justify-between px-3 py-2 text-[10px] font-bold text-white`} style={{ backgroundColor: NAVY }}>
                     <span>DÉSIGNATION</span>
                     <span>TOTAL HT</span>
                   </div>
@@ -494,9 +516,9 @@ export function QuoteDetailView({ id }: QuoteDetailViewProps) {
                           const breakdown = lineBreakdown(item);
                           return (
                             <div key={`${fam}-${idx}`} className="px-3 py-2.5 border-t border-[#F1F5F9]">
-                              {/* ≥sm : aligned 12-col table row */}
-                              <div className="hidden sm:grid grid-cols-12 items-start">
-                                <div className="col-span-6 pr-2">
+                              {/* ≥sm / PDF : aligned table row (flex — PDF-safe) */}
+                              <div className={`${pdfMode ? 'flex' : 'hidden sm:flex'} items-start`}>
+                                <div className="w-1/2 pr-2">
                                   <span className="text-[12px] font-semibold" style={{ color: NAVY }}>{item.description}</span>
                                   {breakdown.length > 0 && (
                                     <div className="mt-0.5 space-y-0.5">
@@ -506,15 +528,15 @@ export function QuoteDetailView({ id }: QuoteDetailViewProps) {
                                     </div>
                                   )}
                                 </div>
-                                <span className="col-span-1 text-center text-[11px]" style={{ color: '#64748B' }}>{fmtNum(item.quantity)}</span>
-                                <span className="col-span-1 text-center text-[11px]" style={{ color: '#64748B' }}>{item.unit || 'u'}</span>
-                                <span className="col-span-2 text-center text-[11px]" style={{ color: '#64748B' }}>{fmtNum(item.unitPrice)} €</span>
-                                <span className="col-span-2 text-right text-[12px] font-bold" style={{ color: NAVY }}>{fmtNum(lineTotal)} €</span>
+                                <span className="w-[10%] text-center text-[11px]" style={{ color: '#64748B' }}>{fmtNum(item.quantity)}</span>
+                                <span className="w-[10%] text-center text-[11px]" style={{ color: '#64748B' }}>{item.unit || 'u'}</span>
+                                <span className="w-[15%] text-center text-[11px]" style={{ color: '#64748B' }}>{fmtNum(item.unitPrice)} €</span>
+                                <span className="w-[15%] text-right text-[12px] font-bold" style={{ color: NAVY }}>{fmtNum(lineTotal)} €</span>
                               </div>
 
                               {/* phone : stacked card — designation on top, then a
                                   Qté · Unité · PU row, with the total on the right */}
-                              <div className="sm:hidden">
+                              <div className={pdfMode ? 'hidden' : 'sm:hidden'}>
                                 <div className="flex items-start justify-between gap-2">
                                   <span className="text-[12px] font-semibold flex-1" style={{ color: NAVY }}>{item.description}</span>
                                   <span className="text-[12px] font-bold whitespace-nowrap" style={{ color: NAVY }}>{fmtNum(lineTotal)} €</span>
@@ -611,35 +633,25 @@ export function QuoteDetailView({ id }: QuoteDetailViewProps) {
           {/* --- RIGHT COLUMN (Actions & Info) --- */}
           <div className="flex flex-col gap-6 mobile-actions-order">
 
-            {/* 1. PDF Preview Card */}
-            <Card className="p-1 border bg-white shadow-sm overflow-hidden">
-              <div className="bg-gray-100 aspect-[21/29] relative flex items-center justify-center rounded-t-xl overflow-hidden group">
-                {/* Mini preview effect */}
-                <div className="absolute inset-4 bg-white shadow-sm flex flex-col p-4 opacity-50 scale-95 group-hover:scale-100 transition-transform duration-500">
-                  <div className="h-4 w-12 bg-gray-200 rounded mb-4" />
-                  <div className="h-2 w-full bg-gray-100 rounded mb-2" />
-                  <div className="h-2 w-2/3 bg-gray-100 rounded mb-2" />
-                </div>
-                <div className="absolute inset-0 flex items-center justify-center bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button variant="secondary" size="sm" className="shadow-lg" onClick={handleDownload}>
-                    <Eye className="mr-2 h-4 w-4" /> Aperçu
-                  </Button>
-                </div>
-                <div className="absolute top-4 right-4 h-10 w-10 bg-red-50 text-red-500 rounded-lg flex items-center justify-center shadow-sm border border-red-100">
+            {/* 1. PDF actions — compact card (the old big white preview
+                placeholder above these buttons was removed). */}
+            <Card className="p-4 border bg-white shadow-sm">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="h-10 w-10 bg-red-50 text-red-500 rounded-lg flex items-center justify-center shrink-0 border border-red-100">
                   <FileText className="h-5 w-5" />
                 </div>
-              </div>
-              <div className="p-4 bg-white">
-                <p className="font-semibold text-primary truncate mb-1">Devis-{quote.id}.pdf</p>
-                <p className="text-xs text-muted-foreground mb-4">PDF • 1.2 MB</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button variant="secondary" className="w-full text-xs" onClick={handleShare}>
-                    <Share2 className="mr-2 h-3 w-3" /> Partager
-                  </Button>
-                  <Button variant="secondary" className="w-full text-xs" onClick={handleDownload}>
-                    <Download className="mr-2 h-3 w-3" /> Télécharger
-                  </Button>
+                <div className="min-w-0">
+                  <p className="font-semibold text-primary truncate text-sm">Devis-{quote.quoteNumber || quote.id.substring(0, 8)}.pdf</p>
+                  <p className="text-xs text-muted-foreground">Document PDF</p>
                 </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Button variant="secondary" className="w-full text-xs" onClick={handleShare}>
+                  <Share2 className="mr-2 h-3 w-3" /> Partager
+                </Button>
+                <Button variant="secondary" className="w-full text-xs" onClick={handleDownload}>
+                  <Download className="mr-2 h-3 w-3" /> Télécharger
+                </Button>
               </div>
             </Card>
 
