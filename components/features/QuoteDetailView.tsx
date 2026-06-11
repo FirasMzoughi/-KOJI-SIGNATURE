@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/Card';
 import { SignatureModal } from '@/components/features/SignatureModal';
 import { useState, useEffect, useRef } from 'react';
 import { formatDate, formatCurrency } from '@/lib/utils';
-import { Download, CheckCircle, Printer, FileText, Share2, Eye, Clock, Paperclip, X, File as FileIcon, Send, MapPin, ClipboardList, Circle } from 'lucide-react';
+import { Download, CheckCircle, Printer, FileText, Share2, Eye, Clock, Paperclip, X, File as FileIcon, Send, ClipboardList, Circle } from 'lucide-react';
 import Image from 'next/image';
 import { Textarea } from '@/components/ui/Textarea';
 import type { Quote, QuoteLineItem } from '@/types';
@@ -401,110 +401,110 @@ export function QuoteDetailView({ id }: QuoteDetailViewProps) {
                 <img src="/koji-mark.svg" alt="" aria-hidden className="w-2/3 max-w-[420px] opacity-[0.05]" />
               </div>
 
-              {/* Everything sits above the watermark */}
+              {/* Everything sits above the watermark — mirrors the koji-main PDF */}
               <div className="relative z-10 space-y-6">
-                {/* Header Row: brand + DEVIS N° */}
+                {/* Top line: "Le {date}" (left) · Devis n° + Version (right) */}
                 <div className="flex justify-between items-start gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="h-11 w-11 rounded-lg overflow-hidden flex items-center justify-center" style={{ backgroundColor: companyLogo ? '#FFFFFF' : NAVY }}>
-                      {companyLogo ? (
-                        <img src={companyLogo} alt={companyName} className="h-full w-full object-cover" />
-                      ) : (
-                        <img src="/koji-mark.svg" alt={companyName} className="h-7 w-7" />
-                      )}
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-base" style={{ color: NAVY }}>{companyName}</h3>
-                      <p className="text-[11px] text-muted-foreground">{companyEmailDisplay}</p>
-                      {company.phone && company.phone.trim() && (
-                        <p className="text-[11px] text-muted-foreground">{company.phone}</p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="rounded-lg px-3 py-1.5 text-center" style={{ backgroundColor: '#F3E5D8' }}>
-                    <p className="text-[8px] font-bold tracking-wide" style={{ color: GOLD }}>DEVIS N°</p>
-                    <p className="text-[11px] font-bold" style={{ color: NAVY }}>{quote.id.substring(0, 8).toUpperCase()}</p>
+                  <p className="text-[11px] text-muted-foreground">Le {formatDate(quote.issuedDate)}</p>
+                  <div className="text-right">
+                    <p className="text-sm font-bold" style={{ color: NAVY }}>
+                      Devis n° : {quote.quoteNumber || quote.id.substring(0, 8).toUpperCase()}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">Version N° : {quote.version || '01'}</p>
                   </div>
                 </div>
 
-                <div className="h-px bg-[#F3F4F6]" />
-
-                {/* Client / Date / Validité */}
-                <div className="flex justify-between gap-4">
-                  <div>
+                {/* Identity row: company logo LEFT + info ↔ client RIGHT */}
+                <div className="flex justify-between gap-6">
+                  <div className="flex items-start gap-3">
+                    {companyLogo ? (
+                      <img src={companyLogo} alt={companyName} className="h-12 w-12 rounded-md object-contain shrink-0" />
+                    ) : (
+                      <div className="h-12 w-12 rounded-md flex items-center justify-center shrink-0" style={{ backgroundColor: NAVY }}>
+                        <img src="/koji-mark.svg" alt={companyName} className="h-7 w-7" />
+                      </div>
+                    )}
+                    <div>
+                      <h3 className="font-bold text-base" style={{ color: NAVY }}>{companyName}</h3>
+                      {company.address && company.address.trim() && (
+                        <p className="text-[11px] text-muted-foreground whitespace-pre-line">{company.address}</p>
+                      )}
+                      {company.phone && company.phone.trim() && (
+                        <p className="text-[11px] text-muted-foreground">{company.phone}</p>
+                      )}
+                      {companyEmailDisplay && (
+                        <p className="text-[11px] text-muted-foreground">{companyEmailDisplay}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
                     <p className="text-[9px] font-bold tracking-wide" style={{ color: GOLD }}>CLIENT</p>
                     <p className="font-bold text-sm" style={{ color: NAVY }}>{quote.clientName}</p>
                     {quote.clientEmail && <p className="text-[11px] text-muted-foreground">{quote.clientEmail}</p>}
                   </div>
-                  <div className="text-right">
-                    <p className="text-[9px] font-bold tracking-wide" style={{ color: GOLD }}>DATE</p>
-                    <p className="text-xs font-semibold" style={{ color: NAVY }}>{formatDate(quote.issuedDate)}</p>
-                    <p className="text-[9px] font-bold tracking-wide mt-1" style={{ color: GOLD }}>VALIDITÉ</p>
-                    <p className="text-xs" style={{ color: NAVY }}>{quote.validUntil && quote.validUntil !== 'N/A' ? quote.validUntil : '—'}</p>
+                </div>
+
+                {/* Adresse du chantier */}
+                {quote.projectTitle && (
+                  <p className="text-xs" style={{ color: NAVY }}>
+                    <span className="font-bold" style={{ color: GOLD }}>Adresse du chantier : </span>
+                    <span className="font-semibold">{quote.projectTitle}</span>
+                  </p>
+                )}
+
+                {/* Validité */}
+                <p className="text-[11px] text-muted-foreground">
+                  Validité du devis : {quote.validUntil && quote.validUntil !== 'N/A' ? quote.validUntil : '30 jours'}
+                </p>
+
+                {/* Section heading directly above the table */}
+                <h4 className="text-sm font-bold" style={{ color: NAVY }}>Description des travaux</h4>
+
+                {/* Single table header (DÉSIGNATION · QTÉ · UNITÉ · P.UNIT HT · TOTAL HT) */}
+                <div className="rounded-t-md overflow-hidden">
+                  <div className="grid grid-cols-12 px-3 py-2 text-[10px] font-bold text-white" style={{ backgroundColor: NAVY }}>
+                    <span className="col-span-6">DÉSIGNATION</span>
+                    <span className="col-span-1 text-center">QTÉ</span>
+                    <span className="col-span-1 text-center">UNITÉ</span>
+                    <span className="col-span-2 text-center">P.UNIT HT</span>
+                    <span className="col-span-2 text-right">TOTAL HT</span>
                   </div>
                 </div>
 
-                {/* Travaux — site address */}
-                {quote.projectTitle && (
-                  <div className="rounded-lg p-3 flex items-center gap-2" style={{ backgroundColor: '#FFFBF6', border: '1px solid #F3E5D8' }}>
-                    <MapPin className="h-4 w-4 shrink-0" style={{ color: GOLD }} />
-                    <p className="text-xs font-semibold" style={{ color: NAVY }}>
-                      Lieu d&apos;exécution : {quote.projectTitle}
-                    </p>
-                  </div>
-                )}
-
-                {/* Room sections (room → famille → lines), like the mobile devis */}
-                <div className="space-y-5">
+                {/* ONE single table: each pièce (salon…) is a row group, its
+                    lines below. No colored bands — just the colored pièce word,
+                    matching the koji-main PDF. */}
+                <div className="border-x border-b border-[#E2E8F0] rounded-b-md overflow-hidden -mt-6">
                   {roomEntries.map((room) => (
-                    <div key={room.name} className="rounded-2xl overflow-hidden border border-[#E2E8F0]">
-                      {/* Room header bar */}
-                      <div className="flex items-center justify-between px-4 py-3" style={{ backgroundColor: NAVY }}>
-                        <span className="font-bold text-sm text-white">{roomLabel(room.name)}</span>
-                        <span className="font-bold text-sm" style={{ color: '#EAD8B1' }}>{fmtNum(room.total)} €</span>
+                    <div key={room.name}>
+                      {/* Pièce name — colored bold word, no background band */}
+                      <div className="px-3 py-2 border-t border-[#F1F5F9]">
+                        <span className="text-[13px] font-bold" style={{ color: GOLD }}>{roomLabel(room.name)}</span>
                       </div>
-
-                      {Object.entries(room.byFamille).map(([fam, lines]) => {
-                        const color = familleColor(fam);
-                        return (
-                          <div key={fam}>
-                            {/* LOT label */}
-                            <div className="flex items-center gap-2 px-4 py-2" style={{ backgroundColor: `${color}14` }}>
-                              <span className="inline-block w-[3px] h-3.5" style={{ backgroundColor: color }} />
-                              <span className="text-[11px] font-bold tracking-wide uppercase" style={{ color }}>{fam}</span>
-                            </div>
-
-                            {/* Lines */}
-                            {lines.map((item, idx) => {
-                              const lineTotal = (item.quantity || 0) * (item.unitPrice || 0);
-                              const breakdown = lineBreakdown(item);
-                              return (
-                                <div key={idx} className="px-3 py-3 border-t border-[#F1F5F9]">
-                                  <div className="flex items-start justify-between gap-3">
-                                    <div className="flex items-start gap-2">
-                                      {item.code && (
-                                        <span className="text-[10px] font-bold rounded px-1.5 py-0.5" style={{ color, backgroundColor: `${color}1A` }}>{item.code}</span>
-                                      )}
-                                      <span className="text-[13px] font-bold" style={{ color: NAVY }}>{item.description}</span>
-                                    </div>
-                                    <span className="text-[12px] font-bold text-white rounded-md px-2 py-1 whitespace-nowrap" style={{ backgroundColor: NAVY }}>{fmtNum(lineTotal)} €</span>
+                      {Object.entries(room.byFamille).map(([fam, lines]) =>
+                        lines.map((item, idx) => {
+                          const lineTotal = (item.quantity || 0) * (item.unitPrice || 0);
+                          const breakdown = lineBreakdown(item);
+                          return (
+                            <div key={`${fam}-${idx}`} className="grid grid-cols-12 px-3 py-2.5 border-t border-[#F1F5F9] items-start">
+                              <div className="col-span-6 pr-2">
+                                <span className="text-[12px] font-semibold" style={{ color: NAVY }}>{item.description}</span>
+                                {breakdown.length > 0 && (
+                                  <div className="mt-0.5 space-y-0.5">
+                                    {breakdown.map((p, i) => (
+                                      <p key={i} className="text-[10px]" style={{ color: '#94A3B8' }}>{p}</p>
+                                    ))}
                                   </div>
-                                  <p className="text-[11px] text-muted-foreground mt-1">
-                                    Qté : {fmtNum(item.quantity)} {item.unit || 'u'} • PU : {formatCurrency(item.unitPrice)}
-                                  </p>
-                                  {breakdown.length > 0 && (
-                                    <div className="mt-1 space-y-0.5">
-                                      {breakdown.map((p, i) => (
-                                        <p key={i} className="text-[10px] font-medium" style={{ color: '#94A3B8' }}>{p}</p>
-                                      ))}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        );
-                      })}
+                                )}
+                              </div>
+                              <span className="col-span-1 text-center text-[11px]" style={{ color: '#64748B' }}>{fmtNum(item.quantity)}</span>
+                              <span className="col-span-1 text-center text-[11px]" style={{ color: '#64748B' }}>{item.unit || 'u'}</span>
+                              <span className="col-span-2 text-center text-[11px]" style={{ color: '#64748B' }}>{fmtNum(item.unitPrice)} €</span>
+                              <span className="col-span-2 text-right text-[12px] font-bold" style={{ color: NAVY }}>{fmtNum(lineTotal)} €</span>
+                            </div>
+                          );
+                        })
+                      )}
                     </div>
                   ))}
                   {roomEntries.length === 0 && (
@@ -542,29 +542,36 @@ export function QuoteDetailView({ id }: QuoteDetailViewProps) {
                   </div>
                 )}
 
-                {/* Entreprise legal / contact footer (shown when provided). */}
-                {(company.address || company.siret || company.rcs || company.tva || company.formeJuridique) && (
-                  <div className="pt-4 mt-2 border-t border-[#F1F5F9] space-y-1">
-                    <p className="text-[9px] font-bold tracking-wide uppercase" style={{ color: GOLD }}>{companyName}</p>
-                    {company.address && company.address.trim() && (
-                      <p className="text-[10px] text-muted-foreground whitespace-pre-line">{company.address}</p>
-                    )}
-                    <p className="text-[10px] text-muted-foreground">
+                {/* ── Footer — mirrors the koji-main PDF: "Edited by Koji" +
+                    logo LEFT · company legal CENTER · page RIGHT ── */}
+                <div className="pt-3 mt-2 border-t border-[#E2E8F0] grid grid-cols-3 items-start gap-2">
+                  {/* Left — Edited by Koji */}
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-muted-foreground">Edited by</span>
+                    <img src="/koji-mark.svg" alt="" aria-hidden className="h-3 w-3" />
+                    <span className="text-[10px] font-bold" style={{ color: GOLD }}>Koji</span>
+                  </div>
+
+                  {/* Center — company legal line (name – SAS · Capital · TVA · SIRET) */}
+                  <div className="text-center space-y-0.5">
+                    <p className="text-[9px] text-muted-foreground">
                       {[
-                        company.formeJuridique && company.formeJuridique.trim() ? company.formeJuridique : null,
-                        company.siret && company.siret.trim() ? `SIRET : ${company.siret}` : null,
-                        company.rcs && company.rcs.trim() ? `RCS : ${company.rcs}` : null,
+                        company.formeJuridique && company.formeJuridique.trim()
+                          ? `${companyName} – ${company.formeJuridique}`
+                          : companyName,
+                        company.capital && company.capital.trim() ? `Capital : ${company.capital}` : null,
+                      ].filter(Boolean).join('  ·  ')}
+                    </p>
+                    <p className="text-[9px] text-muted-foreground">
+                      {[
                         company.tva && company.tva.trim() ? `TVA : ${company.tva}` : null,
+                        company.siret && company.siret.trim() ? `SIRET : ${company.siret}` : null,
                       ].filter(Boolean).join('  ·  ')}
                     </p>
                   </div>
-                )}
 
-                {/* "Créé par Kôji" mark, kept small and on the side */}
-                <div className="pt-4 mt-2 border-t border-[#F1F5F9] flex items-center justify-end gap-1">
-                  <span className="text-[10px] text-muted-foreground">Créé par</span>
-                  <img src="/koji-mark.svg" alt="" aria-hidden className="h-2.5 w-2.5" />
-                  <span className="text-[10px] font-bold" style={{ color: GOLD }}>Kôji</span>
+                  {/* Right — page indicator */}
+                  <p className="text-[9px] text-muted-foreground text-right">Page 1 / 1</p>
                 </div>
               </div>{/* /relative z-10 */}
             </Card>

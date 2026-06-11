@@ -68,6 +68,8 @@ export interface CompanyInfo {
   rcs?: string;
   tva?: string;
   formeJuridique?: string;
+  /** Capital social (e.g. "10 000 €"), shown in the legal footer. */
+  capital?: string;
   /** Public URL of the company logo. */
   logo?: string;
 }
@@ -79,6 +81,10 @@ export interface Quote {
   /** The entreprise that issued the devis (from metadata.company). */
   company?: CompanyInfo;
   projectTitle: string;
+  /** Devis number, e.g. "2026-0001". */
+  quoteNumber?: string;
+  /** Devis version, e.g. "01" — tracks revisions of the same devis. */
+  version?: string;
   status: QuoteStatus;
   issuedDate: string;
   validUntil: string;
