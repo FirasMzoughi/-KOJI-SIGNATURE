@@ -1,6 +1,10 @@
 @import "tailwindcss";
 
 :root {
+  /* The site always renders LIGHT, whatever the phone's theme. Without this,
+     Android Chrome's auto-dark inverted the pages (black cards, invisible
+     date field) on dark-mode phones. */
+  color-scheme: only light;
   --background: #FFF7ED; /* Mobile: Cream */
   --foreground: #0F172A; /* Mobile: Navy */
   --primary: #0F172A; /* Mobile: Navy */

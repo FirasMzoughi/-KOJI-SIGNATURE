@@ -206,6 +206,8 @@ export const useClientStore = create<ClientState>((set, get) => ({
           tva: company.tva || '',
           formeJuridique: company.formeJuridique || '',
           capital: company.capital || '',
+          iban: company.iban || '',
+          bic: company.bic || '',
           logo: company.logo || '',
         },
         quoteNumber: metadata.quoteNumber || data.reference || '',

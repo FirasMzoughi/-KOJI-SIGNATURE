@@ -70,6 +70,9 @@ export interface CompanyInfo {
   formeJuridique?: string;
   /** Capital social (e.g. "10 000 €"), shown in the legal footer. */
   capital?: string;
+  /** IBAN / BIC for the "Informations de paiement" block on the devis. */
+  iban?: string;
+  bic?: string;
   /** Public URL of the company logo. */
   logo?: string;
 }

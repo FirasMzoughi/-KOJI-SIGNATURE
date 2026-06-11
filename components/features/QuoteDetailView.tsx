@@ -354,15 +354,6 @@ export function QuoteDetailView({ id }: QuoteDetailViewProps) {
                 Validité : {quote.validUntil && quote.validUntil !== 'N/A' ? quote.validUntil : '30 jours'}
               </p>
             </div>
-
-            {/* Progress Indicator */}
-            <div className="flex flex-col items-end">
-              <span className="text-xs font-bold text-accent uppercase tracking-wider mb-2">Étape 5/5</span>
-              <div className="flex gap-1">
-                {[1, 2, 3, 4].map(i => <div key={i} className="h-1.5 w-6 rounded-full bg-primary/20" />)}
-                <div className="h-1.5 w-6 rounded-full bg-primary" />
-              </div>
-            </div>
           </div>
         </Card>
 
@@ -582,6 +573,38 @@ export function QuoteDetailView({ id }: QuoteDetailViewProps) {
                   <p className="text-[11px] text-center text-muted-foreground pb-3">Payable à la commande</p>
                 </div>
 
+                {/* ── Informations de paiement — same block as the app's devis ── */}
+                <div className="rounded-xl border border-[#E2E8F0] p-4 space-y-2">
+                  <h4 className="text-sm font-bold" style={{ color: NAVY }}>Informations de paiement</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1.5">
+                    <p className="text-[12px] break-words">
+                      <span style={{ color: '#2563EB' }}>IBAN : </span>
+                      <span style={{ color: NAVY }}>{company.iban && company.iban.trim() ? company.iban : 'À compléter'}</span>
+                    </p>
+                    <p className="text-[12px]">
+                      <span style={{ color: '#2563EB' }}>BIC/SWIFT : </span>
+                      <span style={{ color: NAVY }}>{company.bic && company.bic.trim() ? company.bic : 'À compléter'}</span>
+                    </p>
+                    <p className="text-[12px]">
+                      <span style={{ color: '#2563EB' }}>Titulaire du compte : </span>
+                      <span style={{ color: NAVY }}>{companyName}</span>
+                    </p>
+                  </div>
+                </div>
+
+                {/* ── Conditions de règlement ── */}
+                <div className="space-y-1.5">
+                  <h4 className="text-sm font-bold" style={{ color: NAVY }}>Conditions de règlement</h4>
+                  <p className="text-[12px]">
+                    <span style={{ color: '#2563EB' }}>Délai de paiement : </span>
+                    <span style={{ color: NAVY }}>30 jours</span>
+                  </p>
+                  <p className="text-[12px]">
+                    <span style={{ color: '#2563EB' }}>Validité du devis : </span>
+                    <span style={{ color: NAVY }}>{quote.validUntil && quote.validUntil !== 'N/A' ? quote.validUntil : '30 jours'}</span>
+                  </p>
+                </div>
+
                 {/* Signature Display */}
                 {isAccepted && quote.signature && (
                   <div className="mt-6 pt-6 border-t border-dashed border-[#E2E8F0]">
@@ -701,7 +724,8 @@ export function QuoteDetailView({ id }: QuoteDetailViewProps) {
               <div className="space-y-2">
                 <input
                   type="date"
-                  className="w-full h-12 rounded-xl border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/50 transition-all font-sans"
+                  className="w-full h-12 rounded-xl border border-[#E2E8F0] bg-white px-3 py-2 text-sm text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-accent/50 transition-all font-sans"
+                  style={{ colorScheme: 'light' }}
                   value={quote.startDate || ''}
                   onChange={handleStartDateChange}
                 />
