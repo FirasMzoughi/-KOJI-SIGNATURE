@@ -395,7 +395,7 @@ export function QuoteDetailView({ id }: QuoteDetailViewProps) {
           <div className="md:col-span-2 space-y-6">
 
             {/* Quote Document Card — mirrors the mobile devis layout */}
-            <Card className="relative p-6 md:p-8 bg-white border-none space-y-6 overflow-hidden" id="quote-document">
+            <Card className="relative p-4 sm:p-6 md:p-8 bg-white border-none space-y-6 overflow-hidden" id="quote-document">
               {/* Koji logo watermark in the background */}
               <div className="koji-watermark pointer-events-none absolute inset-0 flex items-center justify-center select-none">
                 <img src="/koji-mark.svg" alt="" aria-hidden className="w-2/3 max-w-[420px] opacity-[0.05]" />
@@ -414,8 +414,9 @@ export function QuoteDetailView({ id }: QuoteDetailViewProps) {
                   </div>
                 </div>
 
-                {/* Identity row: company logo LEFT + info ↔ client RIGHT */}
-                <div className="flex justify-between gap-6">
+                {/* Identity row: company logo LEFT + info ↔ client RIGHT.
+                    Stacks vertically on phone so nothing gets squeezed. */}
+                <div className="flex flex-col sm:flex-row sm:justify-between gap-4 sm:gap-6">
                   <div className="flex items-start gap-3">
                     {companyLogo ? (
                       <img src={companyLogo} alt={companyName} className="h-12 w-12 rounded-md object-contain shrink-0" />
@@ -424,23 +425,23 @@ export function QuoteDetailView({ id }: QuoteDetailViewProps) {
                         <img src="/koji-mark.svg" alt={companyName} className="h-7 w-7" />
                       </div>
                     )}
-                    <div>
+                    <div className="min-w-0">
                       <h3 className="font-bold text-base" style={{ color: NAVY }}>{companyName}</h3>
                       {company.address && company.address.trim() && (
-                        <p className="text-[11px] text-muted-foreground whitespace-pre-line">{company.address}</p>
+                        <p className="text-[11px] text-muted-foreground whitespace-pre-line break-words">{company.address}</p>
                       )}
                       {company.phone && company.phone.trim() && (
                         <p className="text-[11px] text-muted-foreground">{company.phone}</p>
                       )}
                       {companyEmailDisplay && (
-                        <p className="text-[11px] text-muted-foreground">{companyEmailDisplay}</p>
+                        <p className="text-[11px] text-muted-foreground break-words">{companyEmailDisplay}</p>
                       )}
                     </div>
                   </div>
-                  <div className="text-right shrink-0">
+                  <div className="sm:text-right shrink-0">
                     <p className="text-[9px] font-bold tracking-wide" style={{ color: GOLD }}>CLIENT</p>
                     <p className="font-bold text-sm" style={{ color: NAVY }}>{quote.clientName}</p>
-                    {quote.clientEmail && <p className="text-[11px] text-muted-foreground">{quote.clientEmail}</p>}
+                    {quote.clientEmail && <p className="text-[11px] text-muted-foreground break-words">{quote.clientEmail}</p>}
                   </div>
                 </div>
 
@@ -460,14 +461,20 @@ export function QuoteDetailView({ id }: QuoteDetailViewProps) {
                 {/* Section heading directly above the table */}
                 <h4 className="text-sm font-bold" style={{ color: NAVY }}>Description des travaux</h4>
 
-                {/* Single table header (DÉSIGNATION · QTÉ · UNITÉ · P.UNIT HT · TOTAL HT) */}
+                {/* Single table header — full columns on ≥sm, simplified on phone */}
                 <div className="rounded-t-md overflow-hidden">
-                  <div className="grid grid-cols-12 px-3 py-2 text-[10px] font-bold text-white" style={{ backgroundColor: NAVY }}>
+                  {/* Desktop / tablet header */}
+                  <div className="hidden sm:grid grid-cols-12 px-3 py-2 text-[10px] font-bold text-white" style={{ backgroundColor: NAVY }}>
                     <span className="col-span-6">DÉSIGNATION</span>
                     <span className="col-span-1 text-center">QTÉ</span>
                     <span className="col-span-1 text-center">UNITÉ</span>
                     <span className="col-span-2 text-center">P.UNIT HT</span>
                     <span className="col-span-2 text-right">TOTAL HT</span>
+                  </div>
+                  {/* Phone header */}
+                  <div className="flex sm:hidden justify-between px-3 py-2 text-[10px] font-bold text-white" style={{ backgroundColor: NAVY }}>
+                    <span>DÉSIGNATION</span>
+                    <span>TOTAL HT</span>
                   </div>
                 </div>
 
@@ -486,9 +493,32 @@ export function QuoteDetailView({ id }: QuoteDetailViewProps) {
                           const lineTotal = (item.quantity || 0) * (item.unitPrice || 0);
                           const breakdown = lineBreakdown(item);
                           return (
-                            <div key={`${fam}-${idx}`} className="grid grid-cols-12 px-3 py-2.5 border-t border-[#F1F5F9] items-start">
-                              <div className="col-span-6 pr-2">
-                                <span className="text-[12px] font-semibold" style={{ color: NAVY }}>{item.description}</span>
+                            <div key={`${fam}-${idx}`} className="px-3 py-2.5 border-t border-[#F1F5F9]">
+                              {/* ≥sm : aligned 12-col table row */}
+                              <div className="hidden sm:grid grid-cols-12 items-start">
+                                <div className="col-span-6 pr-2">
+                                  <span className="text-[12px] font-semibold" style={{ color: NAVY }}>{item.description}</span>
+                                  {breakdown.length > 0 && (
+                                    <div className="mt-0.5 space-y-0.5">
+                                      {breakdown.map((p, i) => (
+                                        <p key={i} className="text-[10px]" style={{ color: '#94A3B8' }}>{p}</p>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                                <span className="col-span-1 text-center text-[11px]" style={{ color: '#64748B' }}>{fmtNum(item.quantity)}</span>
+                                <span className="col-span-1 text-center text-[11px]" style={{ color: '#64748B' }}>{item.unit || 'u'}</span>
+                                <span className="col-span-2 text-center text-[11px]" style={{ color: '#64748B' }}>{fmtNum(item.unitPrice)} €</span>
+                                <span className="col-span-2 text-right text-[12px] font-bold" style={{ color: NAVY }}>{fmtNum(lineTotal)} €</span>
+                              </div>
+
+                              {/* phone : stacked card — designation on top, then a
+                                  Qté · Unité · PU row, with the total on the right */}
+                              <div className="sm:hidden">
+                                <div className="flex items-start justify-between gap-2">
+                                  <span className="text-[12px] font-semibold flex-1" style={{ color: NAVY }}>{item.description}</span>
+                                  <span className="text-[12px] font-bold whitespace-nowrap" style={{ color: NAVY }}>{fmtNum(lineTotal)} €</span>
+                                </div>
                                 {breakdown.length > 0 && (
                                   <div className="mt-0.5 space-y-0.5">
                                     {breakdown.map((p, i) => (
@@ -496,11 +526,10 @@ export function QuoteDetailView({ id }: QuoteDetailViewProps) {
                                     ))}
                                   </div>
                                 )}
+                                <p className="text-[11px] mt-1" style={{ color: '#64748B' }}>
+                                  {fmtNum(item.quantity)} {item.unit || 'u'} × {fmtNum(item.unitPrice)} € HT
+                                </p>
                               </div>
-                              <span className="col-span-1 text-center text-[11px]" style={{ color: '#64748B' }}>{fmtNum(item.quantity)}</span>
-                              <span className="col-span-1 text-center text-[11px]" style={{ color: '#64748B' }}>{item.unit || 'u'}</span>
-                              <span className="col-span-2 text-center text-[11px]" style={{ color: '#64748B' }}>{fmtNum(item.unitPrice)} €</span>
-                              <span className="col-span-2 text-right text-[12px] font-bold" style={{ color: NAVY }}>{fmtNum(lineTotal)} €</span>
                             </div>
                           );
                         })
@@ -543,8 +572,9 @@ export function QuoteDetailView({ id }: QuoteDetailViewProps) {
                 )}
 
                 {/* ── Footer — mirrors the koji-main PDF: "Edited by Koji" +
-                    logo LEFT · company legal CENTER · page RIGHT ── */}
-                <div className="pt-3 mt-2 border-t border-[#E2E8F0] grid grid-cols-3 items-start gap-2">
+                    logo LEFT · company legal CENTER · page RIGHT. Stacks and
+                    centers on phone. ── */}
+                <div className="pt-3 mt-2 border-t border-[#E2E8F0] flex flex-col items-center gap-2 text-center sm:grid sm:grid-cols-3 sm:items-start sm:text-left">
                   {/* Left — Edited by Koji */}
                   <div className="flex items-center gap-1">
                     <span className="text-[10px] text-muted-foreground">Edited by</span>
@@ -570,8 +600,8 @@ export function QuoteDetailView({ id }: QuoteDetailViewProps) {
                     </p>
                   </div>
 
-                  {/* Right — page indicator */}
-                  <p className="text-[9px] text-muted-foreground text-right">Page 1 / 1</p>
+                  {/* Right — page indicator (desktop only) */}
+                  <p className="hidden sm:block text-[9px] text-muted-foreground text-right">Page 1 / 1</p>
                 </div>
               </div>{/* /relative z-10 */}
             </Card>
